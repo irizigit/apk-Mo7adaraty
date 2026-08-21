@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "663181146339",
+    "project_id": "mo7adaraty-notifications",
+    "storage_bucket": "mo7adaraty-notifications.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:663181146339:android:0dec58b6c20b5576186dd6",
+        "android_client_info": {
+          "package_name": "com.app.mo7adaratynova"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBR0RbPEJ1Clqw-MTLL8YH_bj6k5EZL5co"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
