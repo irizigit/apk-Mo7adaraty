@@ -33,12 +33,14 @@ const FOLDER_COLORS = [
   "#1E8E8A",
 ];
 const FOLDER_ICONS = [
-  "folder-outline",
-  "book-open-page-variant-outline",
-  "school-outline",
-  "notebook-outline",
-  "flask-outline",
-  "code-braces",
+  "folder-star-outline",
+  "folder-account-outline",
+  "folder-heart-outline",
+  "folder-lock-outline",
+  "folder-music-outline",
+  "folder-multiple-image",
+  "folder-cog-outline",
+  "folder-information-outline",
 ];
 
 export function FolderCard({
@@ -73,14 +75,15 @@ export function FolderCard({
         pressed && styles.pressed,
       ]}
     >
-      <View
-        style={[styles.folderIcon, { backgroundColor: `${folder.color}20` }]}
-      >
-        <Icon
-          name={folder.icon as any}
-          size={folder.viewSize === "large" ? 34 : 29}
-          color={folder.color}
-        />
+      <View style={styles.folderGlyphWrap}>
+        <View style={[styles.folderTab, { backgroundColor: folder.color }]} />
+        <View style={[styles.folderIcon, { backgroundColor: folder.color }]}>
+          <Icon
+            name={folder.icon as any}
+            size={folder.viewSize === "large" ? 33 : 28}
+            color="#FFF"
+          />
+        </View>
       </View>
       <Text
         numberOfLines={2}
@@ -288,6 +291,30 @@ export function FolderEditorSheet({
             textAlign="right"
             autoFocus
           />
+          <View
+            style={[
+              styles.folderPreview,
+              { backgroundColor: `${color}15`, borderColor: `${color}40` },
+            ]}
+          >
+            <View style={styles.previewGlyphWrap}>
+              <View style={[styles.previewTab, { backgroundColor: color }]} />
+              <View style={[styles.previewGlyph, { backgroundColor: color }]}>
+                <Icon name={icon as any} color="#FFF" size={25} />
+              </View>
+            </View>
+            <View style={styles.previewTextWrap}>
+              <Text
+                numberOfLines={1}
+                style={[styles.previewName, { color: palette.text }]}
+              >
+                {name || "مجلد المحاضرات"}
+              </Text>
+              <Text style={[styles.previewHint, { color: palette.muted }]}>
+                معاينة شكل المجلد
+              </Text>
+            </View>
+          </View>
           <Text style={[styles.fieldLabel, { color: palette.text }]}>
             اللون
           </Text>
@@ -537,12 +564,31 @@ const styles = StyleSheet.create({
     position: "relative",
     marginBottom: 10,
   },
+  folderGlyphWrap: {
+    width: 52,
+    height: 49,
+    position: "relative",
+    paddingTop: 5,
+  },
+  folderTab: {
+    position: "absolute",
+    top: 0,
+    right: 4,
+    width: 23,
+    height: 13,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
   folderIcon: {
     width: 48,
     height: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 16,
+    shadowColor: "#102331",
+    shadowOpacity: 0.17,
+    shadowRadius: 6,
+    elevation: 3,
   },
   folderName: {
     fontWeight: "900",
@@ -658,6 +704,41 @@ const styles = StyleSheet.create({
     fontSize: 15,
     writingDirection: "rtl",
   },
+  folderPreview: {
+    marginTop: 13,
+    borderRadius: 18,
+    borderWidth: 1,
+    minHeight: 72,
+    paddingHorizontal: 13,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 11,
+  },
+  previewGlyphWrap: {
+    width: 48,
+    height: 45,
+    position: "relative",
+    paddingTop: 5,
+  },
+  previewTab: {
+    position: "absolute",
+    top: 0,
+    right: 4,
+    width: 22,
+    height: 12,
+    borderTopLeftRadius: 7,
+    borderTopRightRadius: 7,
+  },
+  previewGlyph: {
+    width: 45,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewTextWrap: { flex: 1, alignItems: "flex-end" },
+  previewName: { fontWeight: "900", writingDirection: "rtl" },
+  previewHint: { marginTop: 3, fontSize: 11, writingDirection: "rtl" },
   fieldLabel: {
     fontSize: 13,
     fontWeight: "800",

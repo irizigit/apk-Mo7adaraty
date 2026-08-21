@@ -20,7 +20,7 @@ import {
   SelectionToolbar,
 } from "@/components/file-manager-ui";
 import { ScreenContainer } from "@/components/screen-container";
-import { type ManagedFile, useFileManager } from "@/lib/file-manager-store";
+import { useFileManager } from "@/lib/file-manager-store";
 import { useFileTheme } from "@/lib/file-theme";
 
 type Selected = Array<{ id: string; kind: "folder" | "file" }>;
@@ -33,6 +33,7 @@ export default function LibraryScreen() {
     trashItems,
     toggleFavorite,
     shareFile,
+    shareFolder,
     renameItem,
     preferences,
     updatePreferences,
@@ -95,21 +96,37 @@ export default function LibraryScreen() {
     if (!result.canceled) await importFiles(null, result.assets);
   };
   const share = async () => {
-    const files = selection
-      .filter((item) => item.kind === "file")
-      .map((item) => rootFiles.find((file) => file.id === item.id))
-      .filter(Boolean) as ManagedFile[];
-    if (files.length !== 1)
-      return Alert.alert("المشاركة", "اختر ملفاً واحداً لمشاركته.");
-    await shareFile(files[0]);
+    if (selection.length !== 1)
+      return Alert.alert("المشاركة", "اختر ملفاً أو مجلداً واحداً لمشاركته.");
+    const selected = selection[0];
+    const shared =
+      selected.kind === "folder"
+        ? await shareFolder(rootFolders.find((folder) => folder.id === selected.id)!)
+        : await shareFile(rootFiles.find((file) => file.id === selected.id)!);
+    if (!shared)
+      Alert.alert("المشاركة", "لا توجد ملفات صالحة لمشاركة هذا المجلد.");
+    setSelection([]);
   };
   const favorite = () => {
     selection.forEach((item) => toggleFavorite(item.id, item.kind));
     setSelection([]);
   };
   const trash = () => {
-    trashItems(selection);
-    setSelection([]);
+    Alert.alert(
+      "نقل إلى سلة المهملات",
+      `هل تريد نقل ${selection.length} عنصر إلى سلة المهملات؟ يمكنك استعادته لاحقاً.`,
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "نقل إلى السلة",
+          style: "destructive",
+          onPress: () => {
+            trashItems(selection);
+            setSelection([]);
+          },
+        },
+      ],
+    );
   };
   const nextSort = () => {
     const modes = ["date", "name", "size", "type"] as const;
@@ -143,7 +160,7 @@ export default function LibraryScreen() {
       });
   };
   return (
-    <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
+    <ScreenContainer className="px-5">
       <FolderEditorSheet
         visible={newFolder}
         parentId={null}
@@ -209,7 +226,7 @@ export default function LibraryScreen() {
               onFavorite={favorite}
               onShare={share}
               onTrash={trash}
-              canShare={selection.some((item) => item.kind === "file")}
+              canShare={selection.length === 1}
             />
             <Pressable onPress={selectAll} style={styles.selectAll}>
               <Text style={[styles.selectAllText, { color: palette.primary }]}>
@@ -342,7 +359,7 @@ export default function LibraryScreen() {
               onPress={() =>
                 selection.length
                   ? toggle(item.id, "file")
-                  : toggle(item.id, "file")
+                  : router.push({ pathname: "/preview/[id]", params: { id: item.id } } as any)
               }
               onLongPress={() => toggle(item.id, "file")}
               onMore={() => toggle(item.id, "file")}

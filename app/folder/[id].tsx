@@ -19,7 +19,7 @@ import {
   SelectionToolbar,
 } from "@/components/file-manager-ui";
 import { ScreenContainer } from "@/components/screen-container";
-import { type ManagedFile, useFileManager } from "@/lib/file-manager-store";
+import { useFileManager } from "@/lib/file-manager-store";
 import { useFileTheme } from "@/lib/file-theme";
 
 type Selected = Array<{ id: string; kind: "folder" | "file" }>;
@@ -35,6 +35,7 @@ export default function FolderScreen() {
     trashItems,
     toggleFavorite,
     shareFile,
+    shareFolder,
     renameItem,
     preferences,
   } = useFileManager();
@@ -81,21 +82,37 @@ export default function FolderScreen() {
     if (!result.canceled) await importFiles(id, result.assets);
   };
   const share = async () => {
-    const selectedFile = selection.find((item) => item.kind === "file");
-    const file = files.find((item) => item.id === selectedFile?.id) as
-      | ManagedFile
-      | undefined;
-    if (!file || selection.length !== 1)
-      return Alert.alert("المشاركة", "اختر ملفاً واحداً لمشاركته.");
-    await shareFile(file);
+    if (selection.length !== 1)
+      return Alert.alert("المشاركة", "اختر ملفاً أو مجلداً واحداً لمشاركته.");
+    const selected = selection[0];
+    const shared =
+      selected.kind === "folder"
+        ? await shareFolder(subfolders.find((folder) => folder.id === selected.id)!)
+        : await shareFile(files.find((file) => file.id === selected.id)!);
+    if (!shared)
+      Alert.alert("المشاركة", "لا توجد ملفات صالحة لمشاركة هذا المجلد.");
+    setSelection([]);
   };
   const favorite = () => {
     selection.forEach((item) => toggleFavorite(item.id, item.kind));
     setSelection([]);
   };
   const trash = () => {
-    trashItems(selection);
-    setSelection([]);
+    Alert.alert(
+      "نقل إلى سلة المهملات",
+      `هل تريد نقل ${selection.length} عنصر إلى سلة المهملات؟ يمكنك استعادته لاحقاً.`,
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "نقل إلى السلة",
+          style: "destructive",
+          onPress: () => {
+            trashItems(selection);
+            setSelection([]);
+          },
+        },
+      ],
+    );
   };
   const prepareRename = () => {
     if (selection.length !== 1)
@@ -119,7 +136,6 @@ export default function FolderScreen() {
     return (
       <ScreenContainer
         className="items-center justify-center px-6"
-        containerClassName="bg-[#F7F8FA]"
       >
         <Icon name="folder-alert-outline" size={42} color={palette.primary} />
         <Text style={[styles.notFound, { color: palette.text }]}>
@@ -133,7 +149,7 @@ export default function FolderScreen() {
       </ScreenContainer>
     );
   return (
-    <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
+    <ScreenContainer className="px-5">
       <FolderEditorSheet
         visible={newFolder}
         parentId={id}
@@ -203,7 +219,7 @@ export default function FolderScreen() {
               onFavorite={favorite}
               onShare={share}
               onTrash={trash}
-              canShare={selection.some((item) => item.kind === "file")}
+              canShare={selection.length === 1}
             />
             <Pressable onPress={selectAll} style={styles.selectAll}>
               <Text style={[styles.selectAllText, { color: palette.primary }]}>
@@ -297,7 +313,11 @@ export default function FolderScreen() {
             <ManagedFileRow
               file={item}
               selected={isSelected(item.id)}
-              onPress={() => toggle(item.id, "file")}
+              onPress={() =>
+                selection.length
+                  ? toggle(item.id, "file")
+                  : router.push({ pathname: "/preview/[id]", params: { id: item.id } } as any)
+              }
               onLongPress={() => toggle(item.id, "file")}
               onMore={() => toggle(item.id, "file")}
             />

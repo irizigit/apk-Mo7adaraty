@@ -2,6 +2,7 @@ import { View, type ViewProps } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
 import { cn } from "@/lib/utils";
+import { useFileTheme } from "@/lib/file-theme";
 
 export interface ScreenContainerProps extends ViewProps {
   /**
@@ -47,6 +48,7 @@ export function ScreenContainer({
   style,
   ...props
 }: ScreenContainerProps) {
+  const { background } = useFileTheme();
   return (
     <View
       className={cn(
@@ -54,6 +56,7 @@ export function ScreenContainer({
         "bg-background",
         containerClassName
       )}
+      style={{ backgroundColor: background }}
       {...props}
     >
       <SafeAreaView

@@ -49,6 +49,13 @@ export type ManagedFile = {
   trashedAt: number | null;
 };
 
+export type IncomingFile = {
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+  size?: number | null;
+};
+
 export type FilePreferences = {
   theme: ThemePreference;
   background: BackgroundPreference;
@@ -84,6 +91,10 @@ type FileManagerContextValue = StoredState & {
     folderId: string | null,
     assets: DocumentPicker.DocumentPickerAsset[],
   ) => Promise<void>;
+  importIncomingFiles: (
+    folderId: string | null,
+    assets: IncomingFile[],
+  ) => Promise<void>;
   moveItems: (
     selection: Array<{ id: string; kind: "folder" | "file" }>,
     folderId: string | null,
@@ -99,6 +110,7 @@ type FileManagerContextValue = StoredState & {
   ) => Promise<void>;
   toggleFavorite: (id: string, kind: "folder" | "file") => void;
   shareFile: (file: ManagedFile) => Promise<boolean>;
+  shareFolder: (folder: FolderItem) => Promise<boolean>;
   updatePreferences: (changes: Partial<FilePreferences>) => void;
   setPin: (pin: string) => Promise<void>;
   clearPin: () => Promise<void>;
@@ -239,6 +251,39 @@ export function FileManagerProvider({ children }: PropsWithChildren) {
         .map((folder) => folder.id);
       return [folderId, ...direct.flatMap(selectedFolderDescendants)];
     };
+    const importIncomingFiles = async (
+      folderId: string | null,
+      assets: IncomingFile[],
+    ) => {
+      await ensureStorage();
+      const now = Date.now();
+      const additions: ManagedFile[] = [];
+      for (const asset of assets) {
+        const id = makeId("file");
+        const name = sanitizeFileName(asset.name);
+        const extension = extensionOf(name);
+        const destination = `${FILE_DIR}${id}${extension ? `.${extension}` : ""}`;
+        let uri = asset.uri;
+        if (Platform.OS !== "web" && ROOT_DIR) {
+          await FileSystem.copyAsync({ from: asset.uri, to: destination });
+          uri = destination;
+        }
+        additions.push({
+          id,
+          name,
+          folderId,
+          uri,
+          mimeType: asset.mimeType ?? "application/octet-stream",
+          extension,
+          size: asset.size ?? 0,
+          createdAt: now,
+          updatedAt: now,
+          isFavorite: false,
+          trashedAt: null,
+        });
+      }
+      setFiles((current) => [...additions, ...current]);
+    };
 
     return {
       folders,
@@ -317,35 +362,17 @@ export function FileManagerProvider({ children }: PropsWithChildren) {
           ),
         );
       },
+      importIncomingFiles,
       async importFiles(folderId, assets) {
-        await ensureStorage();
-        const now = Date.now();
-        const additions: ManagedFile[] = [];
-        for (const asset of assets) {
-          const id = makeId("file");
-          const name = sanitizeFileName(asset.name);
-          const extension = extensionOf(name);
-          const destination = `${FILE_DIR}${id}${extension ? `.${extension}` : ""}`;
-          let uri = asset.uri;
-          if (Platform.OS !== "web" && ROOT_DIR) {
-            await FileSystem.copyAsync({ from: asset.uri, to: destination });
-            uri = destination;
-          }
-          additions.push({
-            id,
-            name,
-            folderId,
-            uri,
-            mimeType: asset.mimeType ?? "application/octet-stream",
-            extension,
-            size: asset.size ?? 0,
-            createdAt: now,
-            updatedAt: now,
-            isFavorite: false,
-            trashedAt: null,
-          });
-        }
-        setFiles((current) => [...additions, ...current]);
+        await importIncomingFiles(
+          folderId,
+          assets.map((asset) => ({
+            uri: asset.uri,
+            name: asset.name,
+            mimeType: asset.mimeType,
+            size: asset.size,
+          })),
+        );
       },
       moveItems(selection, folderId) {
         const folderIds = selection
@@ -501,6 +528,31 @@ export function FileManagerProvider({ children }: PropsWithChildren) {
         await Sharing.shareAsync(file.uri, {
           dialogTitle: `مشاركة ${file.name}`,
           mimeType: file.mimeType,
+        });
+        return true;
+      },
+      async shareFolder(folder) {
+        if (Platform.OS === "web" || !(await Sharing.isAvailableAsync()))
+          return false;
+        const folderIds = new Set(selectedFolderDescendants(folder.id));
+        const sourceFiles = files
+          .filter(
+            (file) =>
+              file.trashedAt === null &&
+              file.folderId &&
+              folderIds.has(file.folderId) &&
+              file.uri.startsWith("file://"),
+          )
+          .map((file) => file.uri);
+        if (!sourceFiles.length) return false;
+        const { zip, BEST_COMPRESSION } = await import(
+          "react-native-zip-archive"
+        );
+        const archiveUri = `${FileSystem.cacheDirectory ?? FILE_DIR}${sanitizeFileName(folder.name)}-${Date.now()}.zip`;
+        await zip(sourceFiles, archiveUri, BEST_COMPRESSION);
+        await Sharing.shareAsync(archiveUri, {
+          dialogTitle: `مشاركة مجلد ${folder.name}`,
+          mimeType: "application/zip",
         });
         return true;
       },

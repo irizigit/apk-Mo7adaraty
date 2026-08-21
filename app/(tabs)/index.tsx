@@ -36,7 +36,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
+    <ScreenContainer className="px-5">
       <FolderEditorSheet
         visible={newFolder}
         parentId={null}
@@ -181,7 +181,12 @@ export default function HomeScreen() {
               <ManagedFileRow
                 key={file.id}
                 file={file}
-                onPress={() => {}}
+                onPress={() =>
+                  router.push({
+                    pathname: "/preview/[id]",
+                    params: { id: file.id },
+                  } as any)
+                }
                 onLongPress={() => router.push("/library" as any)}
                 onMore={() => router.push("/library" as any)}
               />

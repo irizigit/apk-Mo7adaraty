@@ -43,6 +43,7 @@ const config: ExpoConfig = {
   slug: env.appSlug,
   version: "1.0.0",
   orientation: "portrait",
+  backgroundColor: "#101923",
   icon: "./assets/images/icon.png",
   scheme: env.scheme,
   userInterfaceStyle: "automatic",
@@ -73,6 +74,23 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     "expo-document-picker",
+    "expo-system-ui",
+    [
+      "expo-navigation-bar",
+      {
+        "backgroundColor": "#101923",
+        "barStyle": "light",
+        "borderColor": "#101923",
+        "position": "relative"
+      }
+    ],
+    [
+      "expo-share-intent",
+      {
+        androidIntentFilters: ["*/*"],
+        androidMultiIntentFilters: ["*/*"],
+      },
+    ],
     [
       "expo-local-authentication",
       {
@@ -86,9 +104,9 @@ const config: ExpoConfig = {
         image: "./assets/images/splash-icon.png",
         imageWidth: 200,
         resizeMode: "contain",
-        backgroundColor: "#ffffff",
+        backgroundColor: "#101923",
         dark: {
-          backgroundColor: "#000000",
+          backgroundColor: "#101923",
         },
       },
     ],
@@ -110,6 +128,11 @@ const config: ExpoConfig = {
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
+  },
+  androidStatusBar: {
+    backgroundColor: "#101923",
+    barStyle: "light-content",
+    translucent: false,
   },
 };
 

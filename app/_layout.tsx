@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/lib/theme-provider";
 import { FileManagerProvider } from "@/lib/file-manager-store";
 import { AppLockGate } from "@/components/app-lock-gate";
 import { FileThemeSync } from "@/components/file-theme-sync";
+import { IncomingShareHandler } from "@/components/incoming-share-handler";
+import { ShareIntentProvider } from "expo-share-intent";
 import {
   SafeAreaProvider,
   initialWindowMetrics,
@@ -30,21 +32,25 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider>
-      <SafeAreaProvider initialMetrics={providerInitialMetrics}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <FileManagerProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="folder/[id]" />
-              <Stack.Screen name="search" />
-              <Stack.Screen name="trash" />
-            </Stack>
-            <FileThemeSync />
-            <AppLockGate />
-          </FileManagerProvider>
-        </GestureHandlerRootView>
-      </SafeAreaProvider>
-    </ThemeProvider>
+    <ShareIntentProvider>
+      <ThemeProvider>
+        <SafeAreaProvider initialMetrics={providerInitialMetrics}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <FileManagerProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="folder/[id]" />
+                <Stack.Screen name="preview/[id]" />
+                <Stack.Screen name="search" />
+                <Stack.Screen name="trash" />
+              </Stack>
+              <IncomingShareHandler />
+              <FileThemeSync />
+              <AppLockGate />
+            </FileManagerProvider>
+          </GestureHandlerRootView>
+        </SafeAreaProvider>
+      </ThemeProvider>
+    </ShareIntentProvider>
   );
 }
