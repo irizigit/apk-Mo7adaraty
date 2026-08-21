@@ -56,18 +56,28 @@ export function UpdateManager() {
     let alive = true;
     const run = async () => {
       const versionCode = currentVersionCode();
-      const [manifest, announcement, push] = await Promise.all([
+      // سجّل التثبيت فوراً؛ الحصول على رمز FCM قد يتأخر أو يفشل مؤقتاً ولا يجب أن يمنع عداد الأجهزة.
+      void reportInstallationActivity({
+        versionCode,
+        notificationsAllowed: false,
+        expoPushToken: null,
+      });
+      const [manifest, announcement] = await Promise.all([
         fetchUpdateManifest(),
         fetchAnnouncement(),
-        registerForPushNotifications(false),
       ]);
       if (!alive) return;
       if (manifest && (manifest.versionCode > versionCode || manifest.minSupportedVersionCode > versionCode)) setUpdate(manifest);
-      void reportInstallationActivity({
-        versionCode,
-        notificationsAllowed: preferences.notificationsEnabled && push.allowed && !!push.token,
-        expoPushToken: preferences.notificationsEnabled && push.allowed ? push.token : null,
-      });
+      if (preferences.notificationsEnabled) {
+        const push = await registerForPushNotifications(false);
+        if (push.allowed && push.token) {
+          void reportInstallationActivity({
+            versionCode,
+            notificationsAllowed: true,
+            expoPushToken: push.token,
+          });
+        }
+      }
       if (announcement) {
         const marker = `${announcement.created_at ?? ""}:${announcement.title}:${announcement.body}`;
         const seen = await AsyncStorage.getItem(ANNOUNCEMENT_KEY);
