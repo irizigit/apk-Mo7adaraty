@@ -41,7 +41,7 @@ const env = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "1.1.1",
+  version: "1.1.2",
   orientation: "portrait",
   backgroundColor: "#101923",
   icon: "./assets/images/icon.png",
@@ -65,7 +65,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    versionCode: 3,
+    versionCode: 4,
     permissions: ["POST_NOTIFICATIONS"],
   },
   web: {
@@ -156,6 +156,11 @@ const config: ExpoConfig = {
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
+  },
+  extra: {
+    eas: {
+      projectId: "a16c1872-68e2-4c65-9c00-cdcc3190cbc5",
+    },
   },
   androidStatusBar: {
     backgroundColor: "#101923",
