@@ -4,7 +4,7 @@ import { useFocusEffect } from "expo-router";
 import { Icon } from "@/components/app-ui";
 import { ScreenContainer } from "@/components/screen-container";
 import { useFileTheme } from "@/lib/file-theme";
-import { clearInbox, loadInbox, markAllInboxRead, markInboxRead, type InboxNotification } from "@/lib/notification-inbox";
+import { clearInbox, loadInbox, markAllInboxRead, markInboxRead, setupNotificationListener, type InboxNotification } from "@/lib/notification-inbox";
 
 function relativeDate(value: number) {
   const minutes = Math.max(0, Math.floor((Date.now() - value) / 60000));
@@ -19,7 +19,16 @@ export default function NotificationsScreen() {
   const { palette } = useFileTheme();
   const [items, setItems] = useState<InboxNotification[]>([]);
   const reload = useCallback(async () => setItems(await loadInbox()), []);
-  useEffect(() => { void reload(); }, [reload]);
+  
+  useEffect(() => { 
+    void reload(); 
+    // الاستماع للإشعارات الواردة وتحديث القائمة
+    const subscription = setupNotificationListener(() => {
+      void reload();
+    });
+    return () => subscription.remove();
+  }, [reload]);
+  
   useFocusEffect(useCallback(() => { void reload(); }, [reload]));
 
   const openItem = async (item: InboxNotification) => {
