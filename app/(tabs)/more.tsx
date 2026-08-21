@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { router } from "expo-router";
 import {
   Alert,
   Modal,
@@ -213,6 +214,14 @@ export default function SettingsScreen() {
             title="إشعارات التحديثات"
             subtitle={preferences.notificationsEnabled ? "ستصلك الإعلانات والتحديثات المهمة" : "اختر السماح لتلقي التنبيهات المهمة"}
             right={<Switch value={preferences.notificationsEnabled} onValueChange={changeNotifications} trackColor={{ false: palette.border, true: palette.primary }} thumbColor="#FFF" />}
+            palette={palette}
+          />
+          <Divider color={palette.border} />
+          <Setting
+            icon="bell-badge-outline"
+            title="مركز الإشعارات"
+            subtitle="عرض الإعلانات والتنبيهات ورسائل التحديث"
+            right={<Pressable onPress={() => router.push("/notifications")}><Icon name="chevron-left" color={palette.muted} size={22} /></Pressable>}
             palette={palette}
           />
           <Divider color={palette.border} />

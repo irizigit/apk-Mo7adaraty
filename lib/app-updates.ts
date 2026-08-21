@@ -103,8 +103,20 @@ export async function reportInstallationActivity(options: {
   notificationsAllowed: boolean;
   expoPushToken?: string | null;
 }): Promise<boolean> {
+  const installationId = await getInstallationId();
+  const sendCompatibilityBeacon = async () => {
+    // Unaux قد يحجب POST من التطبيقات بصفحة تحقق JavaScript. لا نضع رمز Push
+    // أو أي بيانات حساسة في هذا المسار؛ هو نبض مجهول لإحصاء التثبيتات فقط.
+    const query = new URLSearchParams({
+      i: installationId,
+      v: String(options.versionCode),
+    });
+    const response = await withTimeout(`${SITE_URL}/api/ping.php?${query.toString()}`);
+    if (!response.ok) return false;
+    const payload = await response.json().catch(() => null);
+    return payload?.ok === true;
+  };
   try {
-    const installationId = await getInstallationId();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 7000);
     try {
@@ -114,15 +126,15 @@ export async function reportInstallationActivity(options: {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ installationId, ...options }),
       });
-      if (!response.ok) return false;
+      if (!response.ok) return sendCompatibilityBeacon();
       const payload = await response.json().catch(() => null);
-      return payload?.ok === true;
+      return payload?.ok === true || sendCompatibilityBeacon();
     } finally {
       clearTimeout(timer);
     }
   } catch {
     // يجب ألا يؤثر تعذر الإحصاءات على استخدام ملفات الطالب.
-    return false;
+    try { return await sendCompatibilityBeacon(); } catch { return false; }
   }
 }
 

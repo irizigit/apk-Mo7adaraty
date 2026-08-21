@@ -42,6 +42,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="folder/[id]" />
                 <Stack.Screen name="preview/[id]" />
+                <Stack.Screen name="notifications" />
                 <Stack.Screen name="search" />
                 <Stack.Screen name="trash" />
               </Stack>

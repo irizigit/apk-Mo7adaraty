@@ -41,7 +41,7 @@ const env = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "1.1.4",
+  version: "1.2.0",
   orientation: "portrait",
   backgroundColor: "#101923",
   icon: "./assets/images/icon.png",
@@ -65,7 +65,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    versionCode: 6,
+    versionCode: 7,
     googleServicesFile: "./google-services.json",
     permissions: ["POST_NOTIFICATIONS"],
   },
@@ -76,6 +76,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    "./plugins/with-rnshare-file-provider",
     "expo-document-picker",
     [
       "expo-audio",

@@ -5,7 +5,8 @@ type ShareableFile = { uri: string; name: string };
 export async function shareMultipleFiles(files: ShareableFile[]): Promise<boolean> {
   const localUris = files
     .map((file) => file.uri.trim())
-    .filter((uri) => uri.startsWith("file://"));
+    .filter((uri) => uri.startsWith("file://"))
+    .filter((uri, index, all) => all.indexOf(uri) === index);
   if (localUris.length < 2) return false;
   try {
     await Share.open({
@@ -13,7 +14,6 @@ export async function shareMultipleFiles(files: ShareableFile[]): Promise<boolea
       urls: localUris,
       type: "*/*",
       failOnCancel: false,
-      useInternalStorage: true,
     });
     return true;
   } catch {
