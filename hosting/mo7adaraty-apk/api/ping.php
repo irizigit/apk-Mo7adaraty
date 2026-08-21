@@ -12,7 +12,7 @@ $versionCode = filter_var($input['versionCode'] ?? null, FILTER_VALIDATE_INT, ['
 $notificationsAllowed = !empty($input['notificationsAllowed']) ? 1 : 0;
 $pushToken = trim((string)($input['expoPushToken'] ?? ''));
 if (!preg_match('/^[a-f0-9-]{16,64}$/', $installationId) || !$versionCode) api_json(['error' => 'invalid_request'], 422);
-if ($pushToken !== '' && (!str_starts_with($pushToken, 'ExponentPushToken[') || strlen($pushToken) > 255)) api_json(['error' => 'invalid_push_token'], 422);
+if ($pushToken !== '' && (!preg_match('/^Expo(?:nent)?PushToken\[[^\]]+\]$/', $pushToken) || strlen($pushToken) > 255)) api_json(['error' => 'invalid_push_token'], 422);
 
 $hash = hash_hmac('sha256', $installationId, app_config()['analytics_salt']);
 $token = $notificationsAllowed && $pushToken !== '' ? $pushToken : null;

@@ -32,16 +32,24 @@ export default function SettingsScreen() {
   const changeNotifications = async (enabled: boolean) => {
     if (!enabled) {
       updatePreferences({ notificationsEnabled: false });
-      void reportInstallationActivity({ versionCode: currentVersionCode(), notificationsAllowed: false });
+      await reportInstallationActivity({ versionCode: currentVersionCode(), notificationsAllowed: false });
       return;
     }
     const result = await registerForPushNotifications(true);
     if (!result.allowed) {
-      Alert.alert("الإشعارات", "لم تمنح الإذن للإشعارات. يمكنك تفعيله لاحقاً من إعدادات الهاتف.");
+      const message =
+        result.reason === "project_unconfigured"
+          ? "إعداد الإشعارات الفورية غير مكتمل في هذه النسخة. سيتم إصلاحه في التحديث القادم."
+          : result.reason === "token_unavailable"
+            ? "تعذر تسجيل رمز الإشعار الآن. تحقق من اتصال الإنترنت ثم أعد المحاولة."
+            : "لم تمنح الإذن للإشعارات. يمكنك تفعيله لاحقاً من إعدادات الهاتف.";
+      await reportInstallationActivity({ versionCode: currentVersionCode(), notificationsAllowed: false });
+      Alert.alert("الإشعارات", message);
       return;
     }
     updatePreferences({ notificationsEnabled: true });
-    void reportInstallationActivity({ versionCode: currentVersionCode(), notificationsAllowed: true, expoPushToken: result.token });
+    const synced = await reportInstallationActivity({ versionCode: currentVersionCode(), notificationsAllowed: true, expoPushToken: result.token });
+    if (!synced) Alert.alert("الإشعارات", "تم إنشاء رمز الإشعار، لكن تعذر تسجيله في الموقع الآن. أعد المحاولة بعد التحقق من اتصال الإنترنت.");
   };
   return (
     <ScreenContainer className="px-5">
@@ -212,7 +220,7 @@ export default function SettingsScreen() {
             icon="chart-timeline-variant"
             title="مساعدة في تحسين التطبيق"
             subtitle="إرسال نشاط مجهول ورقم الإصدار فقط"
-            right={<Switch value={preferences.analyticsEnabled} onValueChange={(enabled) => updatePreferences({ analyticsEnabled: enabled })} trackColor={{ false: palette.border, true: palette.primary }} thumbColor="#FFF" />}
+            right={<Switch value={preferences.analyticsEnabled} onValueChange={async (enabled) => { updatePreferences({ analyticsEnabled: enabled }); if (enabled) await reportInstallationActivity({ versionCode: currentVersionCode(), notificationsAllowed: preferences.notificationsEnabled }); }} trackColor={{ false: palette.border, true: palette.primary }} thumbColor="#FFF" />}
             palette={palette}
           />
         </View>

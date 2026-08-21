@@ -23,6 +23,12 @@ export type RemoteAnnouncement = {
   created_at?: string;
 };
 
+export type PushRegistration = {
+  allowed: boolean;
+  token: string | null;
+  reason?: "web" | "not_physical_device" | "permission_denied" | "project_unconfigured" | "token_unavailable";
+};
+
 function withTimeout(url: string, timeout = 7000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -65,8 +71,8 @@ export async function fetchAnnouncement(): Promise<RemoteAnnouncement | null> {
   }
 }
 
-export async function registerForPushNotifications(requestPermission: boolean) {
-  if (Platform.OS === "web") return { allowed: false, token: null as string | null };
+export async function registerForPushNotifications(requestPermission: boolean): Promise<PushRegistration> {
+  if (Platform.OS === "web") return { allowed: false, token: null, reason: "web" };
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("updates", {
       name: "تحديثات محاضراتي",
@@ -78,13 +84,17 @@ export async function registerForPushNotifications(requestPermission: boolean) {
   const existing = await Notifications.getPermissionsAsync();
   let granted = existing.granted;
   if (!granted && requestPermission) granted = (await Notifications.requestPermissionsAsync()).granted;
-  if (!granted || !Device.isDevice) return { allowed: false, token: null as string | null };
-  const projectId = Constants.expoConfig?.extra?.pushProjectId as string | undefined;
-  if (!projectId) return { allowed: true, token: null as string | null };
+  if (!granted) return { allowed: false, token: null, reason: "permission_denied" };
+  if (!Device.isDevice) return { allowed: false, token: null, reason: "not_physical_device" };
+  const projectId =
+    (Constants.expoConfig?.extra?.eas?.projectId as string | undefined) ??
+    Constants.easConfig?.projectId ??
+    (Constants.expoConfig?.extra?.pushProjectId as string | undefined);
+  if (!projectId) return { allowed: false, token: null, reason: "project_unconfigured" };
   try {
     return { allowed: true, token: (await Notifications.getExpoPushTokenAsync({ projectId })).data };
   } catch {
-    return { allowed: true, token: null as string | null };
+    return { allowed: false, token: null, reason: "token_unavailable" };
   }
 }
 
@@ -92,23 +102,27 @@ export async function reportInstallationActivity(options: {
   versionCode: number;
   notificationsAllowed: boolean;
   expoPushToken?: string | null;
-}) {
+}): Promise<boolean> {
   try {
     const installationId = await getInstallationId();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 7000);
     try {
-      await fetch(`${SITE_URL}/api/ping.php`, {
+      const response = await fetch(`${SITE_URL}/api/ping.php`, {
         method: "POST",
         signal: controller.signal,
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ installationId, ...options }),
       });
+      if (!response.ok) return false;
+      const payload = await response.json().catch(() => null);
+      return payload?.ok === true;
     } finally {
       clearTimeout(timer);
     }
   } catch {
     // يجب ألا يؤثر تعذر الإحصاءات على استخدام ملفات الطالب.
+    return false;
   }
 }
 

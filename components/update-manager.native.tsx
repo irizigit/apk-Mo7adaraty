@@ -16,7 +16,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const ANNOUNCEMENT_KEY = "mo7adaraty-last-announcement-v1";
+const ANNOUNCEMENT_KEY = "mo7adaraty-last-announcement-v2";
 
 function isSafeExternalUrl(value: unknown): value is string {
   return typeof value === "string" && /^https:\/\//i.test(value);
@@ -41,6 +41,18 @@ export function UpdateManager() {
   }, []);
 
   useEffect(() => {
+    const listener = Notifications.addPushTokenListener((token) => {
+      if (!preferences.notificationsEnabled) return;
+      void reportInstallationActivity({
+        versionCode: currentVersionCode(),
+        notificationsAllowed: true,
+        expoPushToken: token.data,
+      });
+    });
+    return () => listener.remove();
+  }, [preferences.notificationsEnabled]);
+
+  useEffect(() => {
     let alive = true;
     const run = async () => {
       const versionCode = currentVersionCode();
@@ -51,13 +63,11 @@ export function UpdateManager() {
       ]);
       if (!alive) return;
       if (manifest && (manifest.versionCode > versionCode || manifest.minSupportedVersionCode > versionCode)) setUpdate(manifest);
-      if (preferences.analyticsEnabled || preferences.notificationsEnabled) {
-        void reportInstallationActivity({
-          versionCode,
-          notificationsAllowed: preferences.notificationsEnabled && push.allowed,
-          expoPushToken: preferences.notificationsEnabled ? push.token : null,
-        });
-      }
+      void reportInstallationActivity({
+        versionCode,
+        notificationsAllowed: preferences.notificationsEnabled && push.allowed && !!push.token,
+        expoPushToken: preferences.notificationsEnabled && push.allowed ? push.token : null,
+      });
       if (announcement) {
         const marker = `${announcement.created_at ?? ""}:${announcement.title}:${announcement.body}`;
         const seen = await AsyncStorage.getItem(ANNOUNCEMENT_KEY);
