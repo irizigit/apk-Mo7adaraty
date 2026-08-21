@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
 
 export type InboxNotificationKind = "announcement" | "update" | "push" | "system";
 
@@ -14,6 +15,15 @@ export type InboxNotification = {
 
 const INBOX_KEY = "mo7adaraty-notification-inbox-v1";
 const MAX_ITEMS = 80;
+
+// إعداد كيفية ظهور الإشعار وهو في وضع التشغيل (Foreground)
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export async function loadInbox(): Promise<InboxNotification[]> {
   try {
@@ -64,4 +74,23 @@ export async function markAllInboxRead() {
 
 export async function clearInbox() {
   await AsyncStorage.removeItem(INBOX_KEY);
+}
+
+// دالة جديدة لاستقبال الإشعار فور وصوله وحفظه تلقائياً
+export function setupNotificationListener(onNotificationReceived?: () => void) {
+  return Notifications.addNotificationReceivedListener(async (notification) => {
+    const content = notification.request.content;
+    const data = content.data || {};
+
+    await addInboxNotification({
+      kind: (data.kind as InboxNotificationKind) || "push",
+      title: content.title || "إشعار جديد",
+      body: content.body || "",
+      actionUrl: (data.url as string) || null,
+    });
+
+    if (onNotificationReceived) {
+      onNotificationReceived();
+    }
+  });
 }
