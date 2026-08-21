@@ -1,10 +1,10 @@
 {
-  "versionName": "1.0.0",
-  "versionCode": 1,
+  "versionName": "1.2.0",
+  "versionCode": 7,
   "minSupportedVersionCode": 1,
   "downloadPageUrl": "https://irizi.unaux.com/mo7adaraty-apk/",
   "mirrors": { "github": null, "googleDrive": null, "mediaFire": null },
-  "message": "سيتم نشر الإصدار الأول قريباً.",
+  "message": "إصدار 1.2.0 يتضمن إصلاح مشاركة عدة ملفات، مركز إشعارات، وتحسين تسجيل التثبيتات.",
   "forceUpdate": false,
-  "publishedAt": "2026-08-21T00:00:00Z"
+  "publishedAt": "2026-08-21T14:48:25Z"
 }
