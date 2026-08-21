@@ -41,7 +41,7 @@ const env = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "1.0.0",
+  version: "1.1.0",
   orientation: "portrait",
   backgroundColor: "#101923",
   icon: "./assets/images/icon.png",
@@ -65,6 +65,8 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
+    versionCode: 2,
+    permissions: ["POST_NOTIFICATIONS"],
   },
   web: {
     bundler: "metro",
@@ -74,6 +76,32 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     "expo-document-picker",
+    [
+      "expo-audio",
+      {
+        "microphonePermission": false,
+        "recordAudioAndroid": false
+      }
+    ],
+    [
+      "expo-video",
+      {
+        "supportsPictureInPicture": true
+      }
+    ],
+    [
+      "expo-notifications",
+      {
+        "color": "#568DFF",
+        "defaultChannel": "updates"
+      }
+    ],
+    [
+      "react-native-share",
+      {
+        "android": []
+      }
+    ],
     "expo-system-ui",
     [
       "expo-navigation-bar",

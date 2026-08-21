@@ -8,6 +8,7 @@ import { FileManagerProvider } from "@/lib/file-manager-store";
 import { AppLockGate } from "@/components/app-lock-gate";
 import { FileThemeSync } from "@/components/file-theme-sync";
 import { IncomingShareHandler } from "@/components/incoming-share-handler";
+import { UpdateManager } from "@/components/update-manager";
 import { ShareIntentProvider } from "expo-share-intent";
 import {
   SafeAreaProvider,
@@ -45,6 +46,7 @@ export default function RootLayout() {
                 <Stack.Screen name="trash" />
               </Stack>
               <IncomingShareHandler />
+              <UpdateManager />
               <FileThemeSync />
               <AppLockGate />
             </FileManagerProvider>

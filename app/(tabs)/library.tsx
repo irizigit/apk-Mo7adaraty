@@ -33,6 +33,7 @@ export default function LibraryScreen() {
     trashItems,
     toggleFavorite,
     shareFile,
+    shareFiles,
     shareFolder,
     renameItem,
     preferences,
@@ -96,16 +97,26 @@ export default function LibraryScreen() {
     if (!result.canceled) await importFiles(null, result.assets);
   };
   const share = async () => {
-    if (selection.length !== 1)
-      return Alert.alert("المشاركة", "اختر ملفاً أو مجلداً واحداً لمشاركته.");
-    const selected = selection[0];
-    const shared =
-      selected.kind === "folder"
-        ? await shareFolder(rootFolders.find((folder) => folder.id === selected.id)!)
-        : await shareFile(rootFiles.find((file) => file.id === selected.id)!);
+    const folders = selection.filter((item) => item.kind === "folder");
+    const selectedFiles = selection
+      .filter((item) => item.kind === "file")
+      .map((item) => rootFiles.find((file) => file.id === item.id))
+      .filter((file): file is NonNullable<typeof file> => !!file);
+    if (folders.length > 1 || (folders.length === 1 && selectedFiles.length))
+      return Alert.alert(
+        "المشاركة",
+        "يمكن مشاركة عدة ملفات معاً، أو مجلد واحد فقط في كل مرة.",
+      );
+    const shared = folders.length
+      ? await shareFolder(rootFolders.find((folder) => folder.id === folders[0].id)!)
+      : selectedFiles.length > 1
+        ? await shareFiles(selectedFiles)
+        : selectedFiles.length === 1
+          ? await shareFile(selectedFiles[0])
+          : false;
     if (!shared)
-      Alert.alert("المشاركة", "لا توجد ملفات صالحة لمشاركة هذا المجلد.");
-    setSelection([]);
+      Alert.alert("المشاركة", "لا توجد عناصر صالحة للمشاركة أو ألغيت نافذة المشاركة.");
+    else setSelection([]);
   };
   const favorite = () => {
     selection.forEach((item) => toggleFavorite(item.id, item.kind));
@@ -226,7 +237,7 @@ export default function LibraryScreen() {
               onFavorite={favorite}
               onShare={share}
               onTrash={trash}
-              canShare={selection.length === 1}
+              canShare={selection.length > 0}
             />
             <Pressable onPress={selectAll} style={styles.selectAll}>
               <Text style={[styles.selectAllText, { color: palette.primary }]}>

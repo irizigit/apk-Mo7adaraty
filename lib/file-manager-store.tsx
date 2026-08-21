@@ -14,6 +14,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import { extensionOf, formatBytes, sanitizeFileName } from "./file-utils";
+import { shareMultipleFiles } from "./multi-file-share";
 
 export { formatBytes } from "./file-utils";
 
@@ -65,6 +66,8 @@ export type FilePreferences = {
   sortDescending: boolean;
   lockEnabled: boolean;
   biometricEnabled: boolean;
+  analyticsEnabled: boolean;
+  notificationsEnabled: boolean;
 };
 
 type StoredState = {
@@ -110,6 +113,7 @@ type FileManagerContextValue = StoredState & {
   ) => Promise<void>;
   toggleFavorite: (id: string, kind: "folder" | "file") => void;
   shareFile: (file: ManagedFile) => Promise<boolean>;
+  shareFiles: (files: ManagedFile[]) => Promise<boolean>;
   shareFolder: (folder: FolderItem) => Promise<boolean>;
   updatePreferences: (changes: Partial<FilePreferences>) => void;
   setPin: (pin: string) => Promise<void>;
@@ -143,6 +147,8 @@ const DEFAULT_PREFERENCES: FilePreferences = {
   sortDescending: true,
   lockEnabled: false,
   biometricEnabled: false,
+  analyticsEnabled: false,
+  notificationsEnabled: false,
 };
 
 const FileManagerContext = createContext<FileManagerContextValue | null>(null);
@@ -530,6 +536,22 @@ export function FileManagerProvider({ children }: PropsWithChildren) {
           mimeType: file.mimeType,
         });
         return true;
+      },
+      async shareFiles(selectedFiles) {
+        const shareable = selectedFiles.filter(
+          (file) => file.trashedAt === null && file.uri.startsWith("file://"),
+        );
+        if (shareable.length === 1) {
+          if (Platform.OS === "web" || !(await Sharing.isAvailableAsync()))
+            return false;
+          await Sharing.shareAsync(shareable[0].uri, {
+            dialogTitle: `مشاركة ${shareable[0].name}`,
+            mimeType: shareable[0].mimeType,
+          });
+          return true;
+        }
+        if (shareable.length < 2 || Platform.OS === "web") return false;
+        return shareMultipleFiles(shareable);
       },
       async shareFolder(folder) {
         if (Platform.OS === "web" || !(await Sharing.isAvailableAsync()))

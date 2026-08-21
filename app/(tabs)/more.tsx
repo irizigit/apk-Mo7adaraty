@@ -14,6 +14,7 @@ import { Icon } from "@/components/app-ui";
 import { ScreenContainer } from "@/components/screen-container";
 import { formatBytes, useFileManager } from "@/lib/file-manager-store";
 import { useFileTheme } from "@/lib/file-theme";
+import { currentVersionCode, registerForPushNotifications, reportInstallationActivity } from "@/lib/app-updates";
 
 export default function SettingsScreen() {
   const {
@@ -28,8 +29,22 @@ export default function SettingsScreen() {
   } = useFileManager();
   const { palette, background, isDark } = useFileTheme();
   const [pinModal, setPinModal] = useState(false);
+  const changeNotifications = async (enabled: boolean) => {
+    if (!enabled) {
+      updatePreferences({ notificationsEnabled: false });
+      void reportInstallationActivity({ versionCode: currentVersionCode(), notificationsAllowed: false });
+      return;
+    }
+    const result = await registerForPushNotifications(true);
+    if (!result.allowed) {
+      Alert.alert("الإشعارات", "لم تمنح الإذن للإشعارات. يمكنك تفعيله لاحقاً من إعدادات الهاتف.");
+      return;
+    }
+    updatePreferences({ notificationsEnabled: true });
+    void reportInstallationActivity({ versionCode: currentVersionCode(), notificationsAllowed: true, expoPushToken: result.token });
+  };
   return (
-    <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
+    <ScreenContainer className="px-5">
       <PinSheet
         visible={pinModal}
         onClose={() => setPinModal(false)}
@@ -180,6 +195,24 @@ export default function SettingsScreen() {
                 ))}
               </View>
             }
+            palette={palette}
+          />
+        </View>
+        <Text style={[styles.sectionTitle, { color: palette.text }]}>التحديثات والخصوصية</Text>
+        <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+          <Setting
+            icon="bell-outline"
+            title="إشعارات التحديثات"
+            subtitle={preferences.notificationsEnabled ? "ستصلك الإعلانات والتحديثات المهمة" : "اختر السماح لتلقي التنبيهات المهمة"}
+            right={<Switch value={preferences.notificationsEnabled} onValueChange={changeNotifications} trackColor={{ false: palette.border, true: palette.primary }} thumbColor="#FFF" />}
+            palette={palette}
+          />
+          <Divider color={palette.border} />
+          <Setting
+            icon="chart-timeline-variant"
+            title="مساعدة في تحسين التطبيق"
+            subtitle="إرسال نشاط مجهول ورقم الإصدار فقط"
+            right={<Switch value={preferences.analyticsEnabled} onValueChange={(enabled) => updatePreferences({ analyticsEnabled: enabled })} trackColor={{ false: palette.border, true: palette.primary }} thumbColor="#FFF" />}
             palette={palette}
           />
         </View>
