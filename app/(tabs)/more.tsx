@@ -1,37 +1,505 @@
-import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
-import { AppCard, Icon, palette, ProgressBar, SectionTitle } from "@/components/app-ui";
+import { useState } from "react";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Icon } from "@/components/app-ui";
 import { ScreenContainer } from "@/components/screen-container";
-import { courseProgress, useStudy } from "@/lib/study-store";
+import { formatBytes, useFileManager } from "@/lib/file-manager-store";
+import { useFileTheme } from "@/lib/file-theme";
 
-export default function MoreScreen() {
-  const { courses, notes } = useStudy();
-  const [reminders, setReminders] = useState(true);
-  const [lock, setLock] = useState(false);
-  const total = useMemo(() => courses.reduce((sum, course) => sum + course.lectures.length, 0), [courses]);
-  const completed = useMemo(() => courses.reduce((sum, course) => sum + course.lectures.filter((lecture) => lecture.completed).length, 0), [courses]);
-  const overall = total ? Math.round((completed / total) * 100) : 0;
-  return <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-      <View style={styles.top}><View style={styles.avatar}><Text style={styles.avatarText}>إ</Text></View><View><Text style={styles.eyebrow}>مساحتك الدراسية</Text><Text style={styles.heading}>المزيد</Text></View></View>
-      <AppCard style={styles.statsCard}><View style={styles.statsHeader}><View><Text style={styles.statsTitle}>ملخص الفصل</Text><Text style={styles.statsText}>أنت تتابع {courses.length} مقررات بتركيز رائع</Text></View><View style={styles.circle}><Text style={styles.circleText}>{overall}%</Text></View></View><ProgressBar value={overall} color={palette.sky} /><View style={styles.numbers}><Text style={styles.numberText}>{completed} محاضرات مكتملة</Text><Text style={styles.numberText}>{notes.length} ملاحظات محفوظة</Text></View></AppCard>
-      <SectionTitle title="تقدم المقررات" />
-      <View style={styles.courseStats}>{courses.map((course) => <View key={course.id} style={styles.courseStat}><View style={[styles.dot, { backgroundColor: course.color }]} /><Text style={styles.courseStatTitle}>{course.title}</Text><Text style={[styles.courseStatPercent, { color: course.color }]}>{courseProgress(course)}%</Text></View>)}</View>
-      <SectionTitle title="تفضيلات الدراسة" />
-      <AppCard style={styles.settingsCard}><SettingRow icon="bell-outline" title="تذكير الدراسة اليومي" subtitle="كل مساء الساعة 8:00" right={<Switch value={reminders} onValueChange={setReminders} trackColor={{ false: "#DDE5E9", true: "#A9D5FC" }} thumbColor={reminders ? palette.sky : "#FFF"} />} /><Divider /><SettingRow icon="shield-lock-outline" title="قفل الملاحظات" subtitle="استخدم رمزاً لحماية المحتوى" right={<Switch value={lock} onValueChange={setLock} trackColor={{ false: "#DDE5E9", true: "#A9D5FC" }} thumbColor={lock ? palette.sky : "#FFF"} />} /><Divider /><SettingRow icon="cloud-outline" title="النسخ الاحتياطي" subtitle="سيتم تفعيله عند ربط خدمة تخزين" right={<Icon name="chevron-left" size={22} color="#87949D" />} onPress={() => Alert.alert("النسخ الاحتياطي", "هذه النسخة تعمل محلياً. يمكن إضافة النسخ السحابي في المرحلة التالية.")} /></AppCard>
-      <Pressable onPress={() => Alert.alert("عن محاضراتي نوفا", "نسخة تجريبية بتجربة عربية مخصصة لإدارة الدراسة.")} style={({ pressed }) => [styles.about, pressed && { opacity: 0.65 }]}><Icon name="information-outline" size={19} color="#79909D" /><Text style={styles.aboutText}>حول محاضراتي نوفا</Text></Pressable>
-    </ScrollView>
-  </ScreenContainer>;
+export default function SettingsScreen() {
+  const {
+    preferences,
+    updatePreferences,
+    folders,
+    files,
+    totalStoredBytes,
+    setPin,
+    clearPin,
+    lock,
+  } = useFileManager();
+  const { palette, background, isDark } = useFileTheme();
+  const [pinModal, setPinModal] = useState(false);
+  return (
+    <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
+      <PinSheet
+        visible={pinModal}
+        onClose={() => setPinModal(false)}
+        onSave={async (pin) => {
+          await setPin(pin);
+          setPinModal(false);
+        }}
+      />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          { backgroundColor: background },
+        ]}
+      >
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.eyebrow, { color: palette.primary }]}>
+              تطبيق محاضراتي
+            </Text>
+            <Text style={[styles.title, { color: palette.text }]}>
+              الإعدادات
+            </Text>
+          </View>
+          <View style={[styles.iconBox, { backgroundColor: palette.soft }]}>
+            <Icon name="cog-outline" color={palette.primary} size={24} />
+          </View>
+        </View>
+        <View
+          style={[
+            styles.summary,
+            { backgroundColor: palette.surface, borderColor: palette.border },
+          ]}
+        >
+          <View style={[styles.summaryIcon, { backgroundColor: palette.soft }]}>
+            <Icon name="harddisk" color={palette.primary} size={23} />
+          </View>
+          <View style={styles.summaryCopy}>
+            <Text style={[styles.summaryTitle, { color: palette.text }]}>
+              {formatBytes(totalStoredBytes)} محفوظ محلياً
+            </Text>
+            <Text style={[styles.summaryText, { color: palette.muted }]}>
+              {folders.filter((item) => !item.trashedAt).length} مجلد ·{" "}
+              {files.filter((item) => !item.trashedAt).length} ملف
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.sectionTitle, { color: palette.text }]}>
+          المظهر
+        </Text>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: palette.surface, borderColor: palette.border },
+          ]}
+        >
+          <Setting
+            icon="theme-light-dark"
+            title="الوضع الداكن"
+            subtitle="تفعيل مظهر مريح للعين"
+            right={
+              <Switch
+                value={isDark}
+                onValueChange={(enabled) =>
+                  updatePreferences({ theme: enabled ? "dark" : "light" })
+                }
+                trackColor={{ false: palette.border, true: palette.primary }}
+                thumbColor="#FFF"
+              />
+            }
+            palette={palette}
+          />
+          <Divider color={palette.border} />
+          <Setting
+            icon="image-filter-hdr-outline"
+            title="خلفية التطبيق"
+            subtitle="اختر الألوان المناسبة لك"
+            right={
+              <View style={styles.backgroundChoices}>
+                {(["paper", "ocean", "violet", "sand"] as const).map((item) => (
+                  <Pressable
+                    key={item}
+                    onPress={() => updatePreferences({ background: item })}
+                    style={[
+                      styles.bgDot,
+                      {
+                        backgroundColor:
+                          item === "paper"
+                            ? "#F7F8FA"
+                            : item === "ocean"
+                              ? "#8DD5FF"
+                              : item === "violet"
+                                ? "#BDA6FF"
+                                : "#F2D393",
+                        borderColor:
+                          preferences.background === item
+                            ? palette.text
+                            : "transparent",
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+            }
+            palette={palette}
+          />
+          <Divider color={palette.border} />
+          <Setting
+            icon="view-grid-outline"
+            title="حجم عرض المجلدات"
+            subtitle="صغير، متوسط أو كبير"
+            right={
+              <View style={styles.sizeChoices}>
+                {(["small", "medium", "large"] as const).map((item) => (
+                  <Pressable
+                    key={item}
+                    onPress={() =>
+                      updatePreferences({ defaultFolderSize: item })
+                    }
+                    style={[
+                      styles.sizeDot,
+                      {
+                        borderColor:
+                          preferences.defaultFolderSize === item
+                            ? palette.primary
+                            : palette.border,
+                        backgroundColor:
+                          preferences.defaultFolderSize === item
+                            ? palette.soft
+                            : "transparent",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.sizeDotText,
+                        {
+                          color:
+                            preferences.defaultFolderSize === item
+                              ? palette.primary
+                              : palette.muted,
+                        },
+                      ]}
+                    >
+                      {item === "small" ? "ص" : item === "medium" ? "و" : "ك"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            }
+            palette={palette}
+          />
+        </View>
+        <Text style={[styles.sectionTitle, { color: palette.text }]}>
+          الخصوصية
+        </Text>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: palette.surface, borderColor: palette.border },
+          ]}
+        >
+          <Setting
+            icon="shield-lock-outline"
+            title="قفل التطبيق برمز PIN"
+            subtitle={
+              preferences.lockEnabled
+                ? "القفل مفعّل"
+                : "أضف رمزاً لحماية مكتبتك"
+            }
+            right={
+              <Switch
+                value={preferences.lockEnabled}
+                onValueChange={(enabled) =>
+                  enabled ? setPinModal(true) : clearPin()
+                }
+                trackColor={{ false: palette.border, true: palette.primary }}
+                thumbColor="#FFF"
+              />
+            }
+            palette={palette}
+          />
+          <Divider color={palette.border} />
+          <Setting
+            icon="fingerprint"
+            title="فتح بالبصمة"
+            subtitle="استخدم البصمة أو الوجه عند توفرهما"
+            right={
+              <Switch
+                value={preferences.biometricEnabled}
+                disabled={!preferences.lockEnabled}
+                onValueChange={(enabled) =>
+                  updatePreferences({ biometricEnabled: enabled })
+                }
+                trackColor={{ false: palette.border, true: palette.primary }}
+                thumbColor="#FFF"
+              />
+            }
+            palette={palette}
+          />
+          <Divider color={palette.border} />
+          <Setting
+            icon="lock-reset"
+            title="قفل الآن"
+            subtitle="إظهار شاشة PIN فوراً"
+            right={
+              <Pressable onPress={lock}>
+                <Icon name="chevron-left" color={palette.muted} size={22} />
+              </Pressable>
+            }
+            palette={palette}
+          />
+        </View>
+        <Pressable
+          onPress={() =>
+            Alert.alert(
+              "محاضراتي",
+              "مدير ملفات دراسي محلي ينظم مجلداتك وملفاتك داخل مساحة التطبيق.",
+            )
+          }
+          style={styles.about}
+        >
+          <Icon name="information-outline" color={palette.muted} size={18} />
+          <Text style={[styles.aboutText, { color: palette.muted }]}>
+            حول تطبيق محاضراتي
+          </Text>
+        </Pressable>
+      </ScrollView>
+    </ScreenContainer>
+  );
 }
 
-function SettingRow({ icon, title, subtitle, right, onPress }: { icon: any; title: string; subtitle: string; right: React.ReactNode; onPress?: () => void }) {
-  return <Pressable disabled={!onPress} onPress={onPress} style={({ pressed }) => [styles.settingRow, pressed && { opacity: 0.65 }]}><View style={styles.settingIcon}><Icon name={icon} size={22} color={palette.navy} /></View><View style={styles.settingCopy}><Text style={styles.settingTitle}>{title}</Text><Text style={styles.settingSubtitle}>{subtitle}</Text></View><View>{right}</View></Pressable>;
+function Setting({
+  icon,
+  title,
+  subtitle,
+  right,
+  palette,
+}: {
+  icon: any;
+  title: string;
+  subtitle: string;
+  right: React.ReactNode;
+  palette: { primary: string; soft: string; text: string; muted: string };
+}) {
+  return (
+    <View style={styles.setting}>
+      <View style={[styles.settingIcon, { backgroundColor: palette.soft }]}>
+        <Icon name={icon} color={palette.primary} size={21} />
+      </View>
+      <View style={styles.settingCopy}>
+        <Text style={[styles.settingTitle, { color: palette.text }]}>
+          {title}
+        </Text>
+        <Text style={[styles.settingSub, { color: palette.muted }]}>
+          {subtitle}
+        </Text>
+      </View>
+      {right}
+    </View>
+  );
 }
-function Divider() { return <View style={styles.divider} />; }
+function Divider({ color }: { color: string }) {
+  return <View style={[styles.divider, { backgroundColor: color }]} />;
+}
+function PinSheet({
+  visible,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (pin: string) => Promise<void>;
+}) {
+  const { palette } = useFileTheme();
+  const [pin, setPin] = useState("");
+  const save = async () => {
+    if (pin.length < 4)
+      return Alert.alert("رمز قصير", "أدخل رمزاً من 4 إلى 6 أرقام.");
+    await onSave(pin);
+    setPin("");
+  };
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modal, { backgroundColor: palette.surface }]}>
+          <Text style={[styles.modalTitle, { color: palette.text }]}>
+            إنشاء رمز PIN
+          </Text>
+          <Text style={[styles.modalText, { color: palette.muted }]}>
+            استخدم من 4 إلى 6 أرقام لحماية ملفاتك.
+          </Text>
+          <TextInput
+            value={pin}
+            onChangeText={setPin}
+            keyboardType="number-pad"
+            secureTextEntry
+            maxLength={6}
+            autoFocus
+            textAlign="center"
+            placeholder="••••"
+            placeholderTextColor={palette.muted}
+            style={[
+              styles.pinInput,
+              {
+                color: palette.text,
+                borderColor: palette.border,
+                backgroundColor: palette.background,
+              },
+            ]}
+          />
+          <View style={styles.modalActions}>
+            <Pressable onPress={onClose}>
+              <Text style={[styles.cancelText, { color: palette.muted }]}>
+                إلغاء
+              </Text>
+            </Pressable>
+            <Pressable onPress={save}>
+              <Text style={[styles.savePin, { color: palette.primary }]}>
+                حفظ الرمز
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: 26 }, top: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "flex-start", gap: 12, paddingTop: 6 }, avatar: { width: 49, height: 49, borderRadius: 18, backgroundColor: palette.navy, alignItems: "center", justifyContent: "center" }, avatarText: { color: "#FFF", fontSize: 21, fontWeight: "900" }, eyebrow: { color: palette.sky, fontSize: 12, fontWeight: "900", textAlign: "right", writingDirection: "rtl" }, heading: { color: palette.ink, fontSize: 25, lineHeight: 31, fontWeight: "900", textAlign: "right", writingDirection: "rtl" },
-  statsCard: { marginTop: 19, padding: 17 }, statsHeader: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }, statsTitle: { color: palette.ink, fontSize: 16, fontWeight: "900", writingDirection: "rtl" }, statsText: { color: palette.muted, fontSize: 12, marginTop: 4, writingDirection: "rtl", textAlign: "right" }, circle: { width: 55, height: 55, borderRadius: 28, backgroundColor: "#EAF5FF", alignItems: "center", justifyContent: "center" }, circleText: { color: palette.sky, fontSize: 15, fontWeight: "900" }, numbers: { flexDirection: "row-reverse", justifyContent: "space-between", marginTop: 13 }, numberText: { color: palette.muted, fontSize: 11, writingDirection: "rtl" },
-  courseStats: { backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E7ECF0", borderRadius: 22, paddingHorizontal: 15 }, courseStat: { minHeight: 49, flexDirection: "row-reverse", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#EDF0F2" }, dot: { width: 9, height: 9, borderRadius: 99, marginLeft: 9 }, courseStatTitle: { flex: 1, color: palette.ink, fontSize: 13, fontWeight: "800", writingDirection: "rtl", textAlign: "right" }, courseStatPercent: { fontSize: 13, fontWeight: "900" },
-  settingsCard: { padding: 0, overflow: "hidden" }, settingRow: { minHeight: 74, flexDirection: "row-reverse", alignItems: "center", paddingHorizontal: 15, gap: 11 }, settingIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: "#EDF5FC", alignItems: "center", justifyContent: "center" }, settingCopy: { flex: 1 }, settingTitle: { color: palette.ink, fontSize: 14, fontWeight: "900", writingDirection: "rtl", textAlign: "right" }, settingSubtitle: { color: palette.muted, fontSize: 11, marginTop: 3, writingDirection: "rtl", textAlign: "right" }, divider: { height: 1, backgroundColor: "#E9EDF0", marginHorizontal: 15 }, about: { alignSelf: "center", flexDirection: "row-reverse", gap: 7, marginTop: 22, padding: 8 }, aboutText: { color: "#79909D", fontSize: 12, writingDirection: "rtl" },
+  content: { paddingBottom: 28 },
+  header: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 6,
+  },
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: "900",
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
+  title: {
+    fontSize: 25,
+    fontWeight: "900",
+    writingDirection: "rtl",
+    marginTop: 2,
+  },
+  iconBox: {
+    width: 47,
+    height: 47,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summary: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 14,
+    marginTop: 18,
+  },
+  summaryIcon: {
+    width: 45,
+    height: 45,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryCopy: { flex: 1, marginRight: 11, alignItems: "flex-end" },
+  summaryTitle: { fontSize: 14, fontWeight: "900", writingDirection: "rtl" },
+  summaryText: { fontSize: 11, marginTop: 3, writingDirection: "rtl" },
+  sectionTitle: {
+    marginTop: 25,
+    marginBottom: 10,
+    fontSize: 17,
+    fontWeight: "900",
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
+  card: { borderRadius: 22, borderWidth: 1, overflow: "hidden" },
+  setting: {
+    minHeight: 73,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  settingIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  settingCopy: { flex: 1, alignItems: "flex-end" },
+  settingTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
+  settingSub: {
+    fontSize: 10,
+    marginTop: 3,
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
+  divider: { height: 1, marginHorizontal: 14 },
+  backgroundChoices: { flexDirection: "row-reverse", gap: 5 },
+  bgDot: { width: 18, height: 18, borderRadius: 10, borderWidth: 2 },
+  sizeChoices: { flexDirection: "row-reverse", gap: 4 },
+  sizeDot: {
+    width: 25,
+    height: 25,
+    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sizeDotText: { fontSize: 10, fontWeight: "900" },
+  about: {
+    flexDirection: "row-reverse",
+    alignSelf: "center",
+    gap: 7,
+    alignItems: "center",
+    padding: 12,
+    marginTop: 15,
+  },
+  aboutText: { fontSize: 12, writingDirection: "rtl" },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "rgba(4,13,20,0.42)",
+  },
+  modal: { borderRadius: 24, padding: 21 },
+  modalTitle: {
+    fontSize: 19,
+    fontWeight: "900",
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
+  modalText: {
+    fontSize: 12,
+    marginTop: 6,
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
+  pinInput: {
+    height: 55,
+    borderWidth: 1,
+    borderRadius: 16,
+    fontSize: 22,
+    letterSpacing: 7,
+    marginTop: 18,
+  },
+  modalActions: {
+    flexDirection: "row-reverse",
+    justifyContent: "flex-start",
+    gap: 22,
+    marginTop: 20,
+  },
+  cancelText: { fontWeight: "900", writingDirection: "rtl" },
+  savePin: { fontWeight: "900", writingDirection: "rtl" },
 });

@@ -1,11 +1,12 @@
 import "@/global.css";
 import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import { useMemo } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
-import { StudyProvider } from "@/lib/study-store";
+import { FileManagerProvider } from "@/lib/file-manager-store";
+import { AppLockGate } from "@/components/app-lock-gate";
+import { FileThemeSync } from "@/components/file-theme-sync";
 import {
   SafeAreaProvider,
   initialWindowMetrics,
@@ -32,13 +33,16 @@ export default function RootLayout() {
     <ThemeProvider>
       <SafeAreaProvider initialMetrics={providerInitialMetrics}>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <StudyProvider>
+          <FileManagerProvider>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="course/[id]" />
+              <Stack.Screen name="folder/[id]" />
+              <Stack.Screen name="search" />
+              <Stack.Screen name="trash" />
             </Stack>
-            <StatusBar style="auto" />
-          </StudyProvider>
+            <FileThemeSync />
+            <AppLockGate />
+          </FileManagerProvider>
         </GestureHandlerRootView>
       </SafeAreaProvider>
     </ThemeProvider>

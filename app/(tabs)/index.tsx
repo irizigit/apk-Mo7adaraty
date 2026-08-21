@@ -1,52 +1,336 @@
+import * as DocumentPicker from "expo-document-picker";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-
-import { AppCard, Icon, IconButton, palette, Pill, ProgressBar, SectionTitle } from "@/components/app-ui";
-import { NewNoteSheet } from "@/components/new-note-sheet";
+import { Icon } from "@/components/app-ui";
+import {
+  FolderCard,
+  FolderEditorSheet,
+  ManagedFileRow,
+} from "@/components/file-manager-ui";
 import { ScreenContainer } from "@/components/screen-container";
-import { courseProgress, useStudy } from "@/lib/study-store";
+import { formatBytes, useFileManager } from "@/lib/file-manager-store";
+import { useFileTheme } from "@/lib/file-theme";
 
-/**
- * Home Screen - NativeWind Example
- *
- * This template uses NativeWind (Tailwind CSS for React Native).
- * You can use familiar Tailwind classes directly in className props.
- *
- * Key patterns:
- * - Use `className` instead of `style` for most styling
- * - Theme colors: use tokens directly (bg-background, text-foreground, bg-primary, etc.); no dark: prefix needed
- * - Responsive: standard Tailwind breakpoints work on web
- * - Custom colors defined in tailwind.config.js
- */
 export default function HomeScreen() {
-  const { courses, notes, addNote } = useStudy();
-  const [noteSheet, setNoteSheet] = useState(false);
-  const allLectures = courses.flatMap((course) => course.lectures.map((lecture) => ({ ...lecture, course })));
-  const completed = allLectures.filter((lecture) => lecture.completed).length;
-  const next = allLectures.find((lecture) => !lecture.completed) ?? allLectures[0];
-  const weeklyProgress = allLectures.length ? Math.round((completed / allLectures.length) * 100) : 0;
-  return <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
-    <NewNoteSheet visible={noteSheet} onClose={() => setNoteSheet(false)} onSave={(title, body) => addNote({ title, body })} />
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-      <View style={styles.topbar}><IconButton name="bell-outline" label="التنبيهات" onPress={() => router.push("/more" as any)} /><View style={styles.brand}><View style={styles.logo}><Icon name="book-open-page-variant" size={21} color="#FFF" /></View><View><Text style={styles.brandKicker}>رفيقك الدراسي</Text><Text style={styles.brandTitle}>محاضراتي <Text style={{ color: palette.sky }}>نوفا</Text></Text></View></View></View>
-      <View style={styles.greeting}><Text style={styles.greetingSmall}>صباح التركيز،</Text><Text style={styles.greetingName}>جاهز لإنجاز جديد؟</Text></View>
-      <View style={styles.weekCard}><View style={styles.weekTop}><View><Text style={styles.weekTitle}>تقدّمك هذا الأسبوع</Text><Text style={styles.weekSub}>واصل، بقي القليل على هدفك</Text></View><View style={styles.weekRing}><Text style={styles.weekPercent}>{weeklyProgress}%</Text></View></View><ProgressBar value={weeklyProgress} color="#FFF" track="rgba(255,255,255,0.22)" /><View style={styles.weekBottom}><Text style={styles.weekBottomText}>أنجزت {completed} من {allLectures.length} محاضرات</Text><Pill label="أسبوع منتج" icon="creation" color="#73530E" background="#FCE5A8" /></View></View>
-      <SectionTitle title="التالي في خطتك" action="عرض الخطة" onAction={() => router.push("/library" as any)} />
-      {next ? <Pressable onPress={() => router.push({ pathname: "/course/[id]", params: { id: next.course.id } } as any)} style={({ pressed }) => [styles.nextCard, pressed && { opacity: 0.78 }]}><View style={[styles.nextIcon, { backgroundColor: next.course.accent }]}><Icon name="play" size={25} color={next.course.color} /></View><View style={styles.nextBody}><Pill label={next.course.title} color={next.course.color} background={next.course.accent} /><Text numberOfLines={1} style={styles.nextTitle}>{next.title}</Text><Text style={styles.nextMeta}>{next.duration} · {next.course.code}</Text></View><Icon name="chevron-left" size={24} color="#83919A" /></Pressable> : null}
-      <SectionTitle title="مقرراتك الأخيرة" action="كل المقررات" onAction={() => router.push("/library" as any)} />
-      <View style={styles.courseGrid}>{courses.slice(0, 3).map((course) => <Pressable key={course.id} onPress={() => router.push({ pathname: "/course/[id]", params: { id: course.id } } as any)} style={({ pressed }) => [styles.courseTile, pressed && { opacity: 0.75 }]}><View style={[styles.courseCircle, { backgroundColor: course.accent }]}><Icon name={course.icon as any} size={24} color={course.color} /></View><Text numberOfLines={1} style={styles.courseTitle}>{course.title}</Text><Text style={styles.courseCode}>{course.code}</Text><ProgressBar value={courseProgress(course)} color={course.color} /><Text style={[styles.coursePercent, { color: course.color }]}>{courseProgress(course)}% مكتمل</Text></Pressable>)}</View>
-      <SectionTitle title="لمحة سريعة" />
-      <AppCard style={styles.noteCard}><View style={styles.noteIcon}><Icon name="lightbulb-on-outline" size={23} color="#A77012" /></View><View style={styles.noteCopy}><Text style={styles.noteTitle}>فكرة اليوم</Text><Text numberOfLines={2} style={styles.noteBody}>{notes[0]?.body ?? "أضف ملاحظة سريعة لتحافظ على أفكارك المهمة."}</Text></View><Pressable onPress={() => setNoteSheet(true)} style={({ pressed }) => [styles.noteAdd, pressed && { opacity: 0.65 }]}><Icon name="plus" size={20} color={palette.navy} /></Pressable></AppCard>
-    </ScrollView>
-  </ScreenContainer>;
+  const { childFolders, files, importFiles, totalStoredBytes } =
+    useFileManager();
+  const { palette, background } = useFileTheme();
+  const [newFolder, setNewFolder] = useState(false);
+  const rootFolders = childFolders(null).slice(0, 4);
+  const recentFiles = useMemo(
+    () =>
+      files
+        .filter((file) => file.trashedAt === null)
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, 3),
+    [files],
+  );
+  const pickFiles = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "*/*",
+      multiple: true,
+      copyToCacheDirectory: true,
+    });
+    if (!result.canceled) await importFiles(null, result.assets);
+  };
+
+  return (
+    <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
+      <FolderEditorSheet
+        visible={newFolder}
+        parentId={null}
+        onClose={() => setNewFolder(false)}
+      />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          { backgroundColor: background },
+        ]}
+      >
+        <View style={styles.topbar}>
+          <Pressable
+            onPress={() => router.push("/search" as any)}
+            style={[
+              styles.searchButton,
+              { borderColor: palette.border, backgroundColor: palette.surface },
+            ]}
+          >
+            <Icon name="magnify" color={palette.muted} size={21} />
+            <Text style={[styles.searchText, { color: palette.muted }]}>
+              ابحث في ملفاتك
+            </Text>
+          </Pressable>
+          <View style={styles.brand}>
+            <View style={[styles.logo, { backgroundColor: palette.navy }]}>
+              <Icon name="folder-multiple" size={21} color="#FFF" />
+            </View>
+            <View>
+              <Text style={[styles.brandKicker, { color: palette.muted }]}>
+                منظم ملفاتك الدراسي
+              </Text>
+              <Text style={[styles.brandTitle, { color: palette.text }]}>
+                محاضراتي
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.greeting}>
+          <Text style={[styles.greetingSmall, { color: palette.muted }]}>
+            كل ملفاتك في مكان واحد،
+          </Text>
+          <Text style={[styles.greetingName, { color: palette.text }]}>
+            ابدأ بتنظيم مكتبتك
+          </Text>
+        </View>
+        <View style={[styles.storageCard, { backgroundColor: palette.navy }]}>
+          <View style={styles.storageTop}>
+            <View>
+              <Text style={styles.storageTitle}>مساحة محاضراتي</Text>
+              <Text style={styles.storageSub}>
+                {formatBytes(totalStoredBytes)} من الملفات المحفوظة
+              </Text>
+            </View>
+            <View style={styles.storageBadge}>
+              <Icon name="harddisk" color="#FFF" size={24} />
+            </View>
+          </View>
+          <View style={styles.storageActions}>
+            <Pressable
+              onPress={() => setNewFolder(true)}
+              style={styles.storageAction}
+            >
+              <Icon name="folder-plus-outline" color="#FFF" size={20} />
+              <Text style={styles.storageActionText}>مجلد جديد</Text>
+            </Pressable>
+            <View style={styles.storageDivider} />
+            <Pressable onPress={pickFiles} style={styles.storageAction}>
+              <Icon name="file-import-outline" color="#FFF" size={20} />
+              <Text style={styles.storageActionText}>استيراد ملفات</Text>
+            </Pressable>
+          </View>
+        </View>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: palette.text }]}>
+            مجلدات سريعة
+          </Text>
+          <Pressable onPress={() => router.push("/library" as any)}>
+            <Text style={[styles.sectionAction, { color: palette.primary }]}>
+              عرض الكل
+            </Text>
+          </Pressable>
+        </View>
+        {rootFolders.length ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.folderStrip}
+          >
+            {rootFolders.map((folder) => (
+              <FolderCard
+                key={folder.id}
+                folder={folder}
+                count={0}
+                onPress={() =>
+                  router.push({
+                    pathname: "/folder/[id]",
+                    params: { id: folder.id },
+                  } as any)
+                }
+                onLongPress={() => router.push("/library" as any)}
+              />
+            ))}
+          </ScrollView>
+        ) : (
+          <Pressable
+            onPress={() => setNewFolder(true)}
+            style={[
+              styles.emptyQuick,
+              { borderColor: palette.border, backgroundColor: palette.surface },
+            ]}
+          >
+            <Icon
+              name="folder-plus-outline"
+              color={palette.primary}
+              size={27}
+            />
+            <Text style={[styles.emptyQuickText, { color: palette.text }]}>
+              أنشئ أول مجلد دراسي
+            </Text>
+          </Pressable>
+        )}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: palette.text }]}>
+            أضيفت حديثاً
+          </Text>
+          <Pressable onPress={() => router.push("/library" as any)}>
+            <Text style={[styles.sectionAction, { color: palette.primary }]}>
+              مكتبتي
+            </Text>
+          </Pressable>
+        </View>
+        <View
+          style={[
+            styles.recentCard,
+            { backgroundColor: palette.surface, borderColor: palette.border },
+          ]}
+        >
+          {recentFiles.length ? (
+            recentFiles.map((file) => (
+              <ManagedFileRow
+                key={file.id}
+                file={file}
+                onPress={() => {}}
+                onLongPress={() => router.push("/library" as any)}
+                onMore={() => router.push("/library" as any)}
+              />
+            ))
+          ) : (
+            <View style={styles.emptyRecent}>
+              <Icon
+                name="file-upload-outline"
+                color={palette.primary}
+                size={31}
+              />
+              <Text style={[styles.emptyRecentTitle, { color: palette.text }]}>
+                لا توجد ملفات بعد
+              </Text>
+              <Text style={[styles.emptyRecentText, { color: palette.muted }]}>
+                استورد ملفاتك إلى مجلد أو إلى المكتبة الرئيسية.
+              </Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </ScreenContainer>
+  );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: 24 }, topbar: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingTop: 5 }, brand: { flexDirection: "row-reverse", alignItems: "center", gap: 9 }, logo: { width: 39, height: 39, borderRadius: 14, backgroundColor: palette.navy, alignItems: "center", justifyContent: "center" }, brandKicker: { color: palette.muted, fontSize: 10, fontWeight: "700", textAlign: "right", writingDirection: "rtl" }, brandTitle: { color: palette.ink, fontSize: 16, fontWeight: "900", textAlign: "right", writingDirection: "rtl" },
-  greeting: { alignItems: "flex-end", marginTop: 24 }, greetingSmall: { color: palette.muted, fontSize: 14, writingDirection: "rtl" }, greetingName: { color: palette.ink, fontSize: 26, lineHeight: 34, fontWeight: "900", writingDirection: "rtl" },
-  weekCard: { backgroundColor: palette.navy, borderRadius: 28, padding: 18, marginTop: 17 }, weekTop: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }, weekTitle: { color: "#FFF", fontSize: 17, fontWeight: "900", writingDirection: "rtl" }, weekSub: { color: "#BDCCE0", fontSize: 12, marginTop: 3, writingDirection: "rtl" }, weekRing: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.20)" }, weekPercent: { color: "#FFF", fontWeight: "900", fontSize: 15 }, weekBottom: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginTop: 12 }, weekBottomText: { color: "#C3D2E5", fontSize: 11, writingDirection: "rtl" },
-  nextCard: { flexDirection: "row-reverse", alignItems: "center", backgroundColor: "#FFF", borderRadius: 24, borderWidth: 1, borderColor: "#E7ECF0", padding: 14, gap: 11, shadowColor: "#16374E", shadowOpacity: 0.04, shadowRadius: 12, elevation: 2 }, nextIcon: { width: 52, height: 52, borderRadius: 18, alignItems: "center", justifyContent: "center" }, nextBody: { flex: 1, alignItems: "flex-end" }, nextTitle: { color: palette.ink, fontSize: 15, fontWeight: "900", textAlign: "right", writingDirection: "rtl", marginTop: 7 }, nextMeta: { color: palette.muted, fontSize: 11, marginTop: 4, writingDirection: "rtl" },
-  courseGrid: { flexDirection: "row-reverse", gap: 9 }, courseTile: { flex: 1, minHeight: 151, backgroundColor: "#FFF", padding: 12, borderRadius: 22, borderWidth: 1, borderColor: "#E7ECF0" }, courseCircle: { width: 39, height: 39, borderRadius: 14, alignItems: "center", justifyContent: "center", alignSelf: "flex-end" }, courseTitle: { color: palette.ink, fontSize: 13, fontWeight: "900", textAlign: "right", writingDirection: "rtl", marginTop: 12 }, courseCode: { color: palette.muted, fontSize: 10, textAlign: "right", marginTop: 3 }, coursePercent: { fontSize: 10, fontWeight: "900", textAlign: "right", marginTop: 7, writingDirection: "rtl" },
-  noteCard: { flexDirection: "row-reverse", alignItems: "center", gap: 10, padding: 13 }, noteIcon: { width: 42, height: 42, backgroundColor: "#FFF3D7", borderRadius: 15, alignItems: "center", justifyContent: "center" }, noteCopy: { flex: 1, alignItems: "flex-end" }, noteTitle: { color: palette.ink, fontSize: 13, fontWeight: "900", writingDirection: "rtl" }, noteBody: { color: palette.muted, fontSize: 11, lineHeight: 17, textAlign: "right", writingDirection: "rtl", marginTop: 3 }, noteAdd: { width: 34, height: 34, borderRadius: 12, backgroundColor: "#EDF5FC", alignItems: "center", justifyContent: "center" },
+  content: { paddingBottom: 26 },
+  topbar: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 5,
+  },
+  brand: { flexDirection: "row-reverse", alignItems: "center", gap: 9 },
+  logo: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  brandKicker: {
+    fontSize: 10,
+    fontWeight: "700",
+    textAlign: "right",
+    writingDirection: "rtl",
+  },
+  brandTitle: {
+    fontSize: 17,
+    fontWeight: "900",
+    textAlign: "right",
+    writingDirection: "rtl",
+  },
+  searchButton: {
+    height: 39,
+    borderWidth: 1,
+    borderRadius: 14,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 11,
+  },
+  searchText: { fontSize: 11, writingDirection: "rtl" },
+  greeting: { alignItems: "flex-end", marginTop: 24 },
+  greetingSmall: { fontSize: 13, writingDirection: "rtl" },
+  greetingName: {
+    fontSize: 25,
+    lineHeight: 34,
+    fontWeight: "900",
+    writingDirection: "rtl",
+  },
+  storageCard: { borderRadius: 28, padding: 18, marginTop: 17 },
+  storageTop: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  storageTitle: {
+    color: "#FFF",
+    fontSize: 18,
+    fontWeight: "900",
+    writingDirection: "rtl",
+  },
+  storageSub: {
+    color: "#C4D6E5",
+    fontSize: 12,
+    marginTop: 4,
+    writingDirection: "rtl",
+  },
+  storageBadge: {
+    width: 47,
+    height: 47,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.13)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  storageActions: {
+    flexDirection: "row-reverse",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.15)",
+    marginTop: 17,
+    paddingTop: 14,
+  },
+  storageAction: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  storageActionText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "800",
+    writingDirection: "rtl",
+  },
+  storageDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.16)" },
+  sectionHeader: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 25,
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: "900", writingDirection: "rtl" },
+  sectionAction: { fontSize: 12, fontWeight: "900", writingDirection: "rtl" },
+  folderStrip: { flexDirection: "row-reverse", gap: 10 },
+  emptyQuick: {
+    height: 105,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  emptyQuickText: { fontWeight: "800", writingDirection: "rtl" },
+  recentCard: { borderRadius: 22, borderWidth: 1, paddingHorizontal: 13 },
+  emptyRecent: { alignItems: "center", paddingVertical: 30 },
+  emptyRecentTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 9,
+    writingDirection: "rtl",
+  },
+  emptyRecentText: {
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 5,
+    writingDirection: "rtl",
+  },
 });

@@ -1,58 +1,472 @@
+import * as DocumentPicker from "expo-document-picker";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { AppCard, Icon, IconButton, palette, ProgressBar } from "@/components/app-ui";
-import { NewCourseSheet } from "@/components/new-course-sheet";
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Icon } from "@/components/app-ui";
+import {
+  FolderCard,
+  FolderEditorSheet,
+  ManagedFileRow,
+  MoveSheet,
+  RenameSheet,
+  SelectionToolbar,
+} from "@/components/file-manager-ui";
 import { ScreenContainer } from "@/components/screen-container";
-import { courseProgress, useStudy, type Course } from "@/lib/study-store";
+import { type ManagedFile, useFileManager } from "@/lib/file-manager-store";
+import { useFileTheme } from "@/lib/file-theme";
 
-function CourseRow({ course }: { course: Course }) {
-  const progress = courseProgress(course);
-  return <Pressable onPress={() => router.push({ pathname: "/course/[id]", params: { id: course.id } } as any)} style={({ pressed }) => [styles.coursePress, pressed && { opacity: 0.74 }]}>
-    <AppCard style={styles.courseCard}>
-      <View style={[styles.courseIcon, { backgroundColor: course.accent }]}><Icon name={course.icon as any} size={27} color={course.color} /></View>
-      <View style={styles.courseMain}><View style={styles.titleLine}><Text style={styles.courseTitle}>{course.title}</Text><Icon name="chevron-left" size={20} color="#8D9AA3" /></View><Text style={styles.courseCode}>{course.code} · {course.lecturer}</Text><View style={styles.progressLine}><Text style={[styles.percent, { color: course.color }]}>{progress}%</Text><View style={styles.grow}><ProgressBar value={progress} color={course.color} /></View></View></View>
-    </AppCard>
-  </Pressable>;
-}
+type Selected = Array<{ id: string; kind: "folder" | "file" }>;
 
 export default function LibraryScreen() {
-  const { courses, addCourse } = useStudy();
+  const {
+    childFolders,
+    childFiles,
+    importFiles,
+    trashItems,
+    toggleFavorite,
+    shareFile,
+    renameItem,
+    preferences,
+    updatePreferences,
+  } = useFileManager();
+  const { palette, background } = useFileTheme();
   const [query, setQuery] = useState("");
-  const [sheetVisible, setSheetVisible] = useState(false);
-  const filtered = useMemo(() => courses.filter((course) => `${course.title} ${course.code}`.toLowerCase().includes(query.toLowerCase())), [courses, query]);
-  return <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
-    <NewCourseSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} onSave={addCourse} />
-    <View style={styles.top}><View><Text style={styles.eyebrow}>مكتبتي الدراسية</Text><Text style={styles.heading}>كل مقرراتك في مكان واحد</Text></View><IconButton name="plus" label="إضافة مقرر" tone="primary" onPress={() => setSheetVisible(true)} /></View>
-    <View style={styles.search}><Icon name="magnify" size={21} color="#87949D" /><TextInput value={query} onChangeText={setQuery} placeholder="ابحث في مقرراتك وملفاتك" placeholderTextColor="#96A2AA" style={styles.searchInput} textAlign="right" /></View>
-    <View style={styles.filters}><Pressable style={styles.activeFilter}><Text style={styles.activeFilterText}>المقررات</Text></Pressable><Pressable style={styles.filter}><Text style={styles.filterText}>الملفات</Text></Pressable><Pressable style={styles.filter}><Text style={styles.filterText}>المفضلة</Text></Pressable></View>
-    <FlatList data={filtered} renderItem={({ item }) => <CourseRow course={item} />} keyExtractor={(item) => item.id} showsVerticalScrollIndicator={false} contentContainerStyle={styles.list} ListEmptyComponent={<View style={styles.empty}><Icon name="book-plus-outline" size={43} color="#A2B0B9" /><Text style={styles.emptyTitle}>لا توجد نتائج مطابقة</Text><Text style={styles.emptyText}>جرّب بحثاً آخر أو أضف مقرراً جديداً.</Text></View>} />
-  </ScreenContainer>;
+  const [newFolder, setNewFolder] = useState(false);
+  const [selection, setSelection] = useState<Selected>([]);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{
+    id: string;
+    kind: "folder" | "file";
+    name: string;
+  } | null>(null);
+  const direction = preferences.sortDescending ? -1 : 1;
+  const compare = (
+    a: { name: string; updatedAt: number; size?: number; extension?: string },
+    b: { name: string; updatedAt: number; size?: number; extension?: string },
+  ) => {
+    if (preferences.sortBy === "name")
+      return a.name.localeCompare(b.name, "ar") * direction;
+    if (preferences.sortBy === "size")
+      return ((a.size ?? 0) - (b.size ?? 0)) * direction;
+    if (preferences.sortBy === "type")
+      return (a.extension ?? "").localeCompare(b.extension ?? "") * direction;
+    return (a.updatedAt - b.updatedAt) * direction;
+  };
+  const rootFolders = useMemo(
+    () =>
+      childFolders(null)
+        .filter((item) => item.name.toLowerCase().includes(query.toLowerCase()))
+        .sort(compare),
+    [childFolders, query, preferences.sortBy, preferences.sortDescending],
+  );
+  const rootFiles = useMemo(
+    () =>
+      childFiles(null)
+        .filter((item) => item.name.toLowerCase().includes(query.toLowerCase()))
+        .sort(compare),
+    [childFiles, query, preferences.sortBy, preferences.sortDescending],
+  );
+  const isSelected = (id: string) => selection.some((item) => item.id === id);
+  const toggle = (id: string, kind: "folder" | "file") =>
+    setSelection((current) =>
+      current.some((item) => item.id === id)
+        ? current.filter((item) => item.id !== id)
+        : [...current, { id, kind }],
+    );
+  const selectAll = () =>
+    setSelection([
+      ...rootFolders.map((item) => ({ id: item.id, kind: "folder" as const })),
+      ...rootFiles.map((item) => ({ id: item.id, kind: "file" as const })),
+    ]);
+  const pickFiles = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "*/*",
+      multiple: true,
+      copyToCacheDirectory: true,
+    });
+    if (!result.canceled) await importFiles(null, result.assets);
+  };
+  const share = async () => {
+    const files = selection
+      .filter((item) => item.kind === "file")
+      .map((item) => rootFiles.find((file) => file.id === item.id))
+      .filter(Boolean) as ManagedFile[];
+    if (files.length !== 1)
+      return Alert.alert("المشاركة", "اختر ملفاً واحداً لمشاركته.");
+    await shareFile(files[0]);
+  };
+  const favorite = () => {
+    selection.forEach((item) => toggleFavorite(item.id, item.kind));
+    setSelection([]);
+  };
+  const trash = () => {
+    trashItems(selection);
+    setSelection([]);
+  };
+  const nextSort = () => {
+    const modes = ["date", "name", "size", "type"] as const;
+    const index = modes.indexOf(preferences.sortBy);
+    updatePreferences({ sortBy: modes[(index + 1) % modes.length] });
+  };
+  const sortLabel =
+    preferences.sortBy === "date"
+      ? "الأحدث"
+      : preferences.sortBy === "name"
+        ? "الاسم"
+        : preferences.sortBy === "size"
+          ? "الحجم"
+          : "النوع";
+  const prepareRename = () => {
+    if (selection.length !== 1)
+      return Alert.alert(
+        "إعادة التسمية",
+        "اختر عنصراً واحداً فقط لإعادة تسميته.",
+      );
+    const selected = selection[0];
+    const item =
+      selected.kind === "folder"
+        ? rootFolders.find((folder) => folder.id === selected.id)
+        : rootFiles.find((file) => file.id === selected.id);
+    if (item)
+      setRenameTarget({
+        id: selected.id,
+        kind: selected.kind,
+        name: item.name,
+      });
+  };
+  return (
+    <ScreenContainer className="px-5" containerClassName="bg-[#F7F8FA]">
+      <FolderEditorSheet
+        visible={newFolder}
+        parentId={null}
+        onClose={() => setNewFolder(false)}
+      />
+      <MoveSheet
+        visible={moveOpen}
+        selection={selection}
+        onClose={() => setMoveOpen(false)}
+      />
+      <RenameSheet
+        visible={!!renameTarget}
+        initialValue={renameTarget?.name ?? ""}
+        label="إعادة تسمية"
+        onClose={() => setRenameTarget(null)}
+        onSave={async (name) => {
+          if (renameTarget) {
+            await renameItem(renameTarget.id, renameTarget.kind, name);
+            setSelection([]);
+          }
+        }}
+      />
+      <View style={[styles.full, { backgroundColor: background }]}>
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.eyebrow, { color: palette.primary }]}>
+              مكتبتي المحلية
+            </Text>
+            <Text style={[styles.title, { color: palette.text }]}>
+              ملفاتك ومجلداتك
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setNewFolder(true)}
+            style={[styles.addButton, { backgroundColor: palette.navy }]}
+          >
+            <Icon name="folder-plus-outline" color="#FFF" size={22} />
+          </Pressable>
+        </View>
+        <View
+          style={[
+            styles.search,
+            { backgroundColor: palette.surface, borderColor: palette.border },
+          ]}
+        >
+          <Icon name="magnify" color={palette.muted} size={21} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="ابحث في المكتبة"
+            placeholderTextColor={palette.muted}
+            style={[styles.searchInput, { color: palette.text }]}
+            textAlign="right"
+          />
+        </View>
+        {selection.length ? (
+          <>
+            <SelectionToolbar
+              selection={selection}
+              onClear={() => setSelection([])}
+              onMove={() => setMoveOpen(true)}
+              onRename={prepareRename}
+              onFavorite={favorite}
+              onShare={share}
+              onTrash={trash}
+              canShare={selection.some((item) => item.kind === "file")}
+            />
+            <Pressable onPress={selectAll} style={styles.selectAll}>
+              <Text style={[styles.selectAllText, { color: palette.primary }]}>
+                تحديد الكل
+              </Text>
+            </Pressable>
+          </>
+        ) : (
+          <View style={styles.controls}>
+            <Pressable
+              onPress={pickFiles}
+              style={[styles.importButton, { backgroundColor: palette.soft }]}
+            >
+              <Icon
+                name="file-import-outline"
+                color={palette.primary}
+                size={20}
+              />
+              <Text style={[styles.importText, { color: palette.primary }]}>
+                استيراد ملفات
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={nextSort}
+              style={[
+                styles.sortButton,
+                {
+                  borderColor: palette.border,
+                  backgroundColor: palette.surface,
+                },
+              ]}
+            >
+              <Icon name="sort-variant" color={palette.muted} size={18} />
+              <Text style={[styles.sortText, { color: palette.muted }]}>
+                {sortLabel}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() =>
+                updatePreferences({
+                  folderView:
+                    preferences.folderView === "grid" ? "list" : "grid",
+                })
+              }
+              style={[
+                styles.viewButton,
+                {
+                  borderColor: palette.border,
+                  backgroundColor: palette.surface,
+                },
+              ]}
+            >
+              <Icon
+                name={
+                  preferences.folderView === "grid"
+                    ? "view-list-outline"
+                    : "view-grid-outline"
+                }
+                color={palette.muted}
+                size={21}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/trash" as any)}
+              style={[
+                styles.viewButton,
+                {
+                  borderColor: palette.border,
+                  backgroundColor: palette.surface,
+                },
+              ]}
+            >
+              <Icon name="trash-can-outline" color={palette.muted} size={21} />
+            </Pressable>
+          </View>
+        )}
+        <FlatList
+          data={rootFiles}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            <>
+              {rootFolders.length ? (
+                <>
+                  <Text style={[styles.label, { color: palette.muted }]}>
+                    مجلدات
+                  </Text>
+                  <View
+                    style={
+                      preferences.folderView === "grid"
+                        ? styles.grid
+                        : styles.folderList
+                    }
+                  >
+                    {rootFolders.map((folder) => (
+                      <FolderCard
+                        key={folder.id}
+                        folder={folder}
+                        count={
+                          childFolders(folder.id).length +
+                          childFiles(folder.id).length
+                        }
+                        selected={isSelected(folder.id)}
+                        onPress={() =>
+                          selection.length
+                            ? toggle(folder.id, "folder")
+                            : router.push({
+                                pathname: "/folder/[id]",
+                                params: { id: folder.id },
+                              } as any)
+                        }
+                        onLongPress={() => toggle(folder.id, "folder")}
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : null}
+              {rootFiles.length ? (
+                <Text style={[styles.label, { color: palette.muted }]}>
+                  ملفات
+                </Text>
+              ) : null}
+            </>
+          }
+          renderItem={({ item }) => (
+            <ManagedFileRow
+              file={item}
+              selected={isSelected(item.id)}
+              onPress={() =>
+                selection.length
+                  ? toggle(item.id, "file")
+                  : toggle(item.id, "file")
+              }
+              onLongPress={() => toggle(item.id, "file")}
+              onMore={() => toggle(item.id, "file")}
+            />
+          )}
+          ListEmptyComponent={
+            !rootFolders.length ? (
+              <View style={styles.empty}>
+                <Icon
+                  name="folder-open-outline"
+                  color={palette.primary}
+                  size={48}
+                />
+                <Text style={[styles.emptyTitle, { color: palette.text }]}>
+                  مكتبتك جاهزة للتنظيم
+                </Text>
+                <Text style={[styles.emptyText, { color: palette.muted }]}>
+                  أنشئ مجلداً أو استورد ملفاتك من الهاتف.
+                </Text>
+              </View>
+            ) : null
+          }
+        />
+      </View>
+    </ScreenContainer>
+  );
 }
 
 const styles = StyleSheet.create({
-  top: { flexDirection: "row-reverse", alignItems: "flex-start", justifyContent: "space-between", paddingTop: 6, marginBottom: 18 },
-  eyebrow: { color: palette.sky, fontSize: 12, fontWeight: "900", textAlign: "right", writingDirection: "rtl" },
-  heading: { color: palette.ink, fontSize: 22, lineHeight: 30, fontWeight: "900", textAlign: "right", writingDirection: "rtl", marginTop: 2 },
-  search: { height: 51, flexDirection: "row-reverse", alignItems: "center", borderRadius: 17, borderWidth: 1, borderColor: "#E4EAEE", backgroundColor: "#FFF", paddingHorizontal: 15, gap: 9 },
-  searchInput: { flex: 1, color: palette.ink, fontSize: 14, writingDirection: "rtl" },
-  filters: { flexDirection: "row-reverse", gap: 8, marginTop: 15, marginBottom: 10 },
-  activeFilter: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: palette.navy },
-  activeFilterText: { color: "#FFF", fontSize: 12, fontWeight: "800", writingDirection: "rtl" },
-  filter: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 12, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E4EAEE" },
-  filterText: { color: palette.muted, fontSize: 12, fontWeight: "800", writingDirection: "rtl" },
-  list: { paddingTop: 4, paddingBottom: 24 },
-  coursePress: { marginTop: 11 },
-  courseCard: { flexDirection: "row-reverse", alignItems: "center", padding: 14 },
-  courseIcon: { width: 54, height: 54, borderRadius: 19, alignItems: "center", justifyContent: "center" },
-  courseMain: { flex: 1, marginRight: 13 },
-  titleLine: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
-  courseTitle: { color: palette.ink, fontSize: 16, fontWeight: "900", writingDirection: "rtl" },
-  courseCode: { color: palette.muted, fontSize: 11, marginTop: 4, writingDirection: "rtl", textAlign: "right" },
-  progressLine: { flexDirection: "row-reverse", alignItems: "center", gap: 9, marginTop: 10 },
-  percent: { fontWeight: "900", fontSize: 12, minWidth: 29, textAlign: "right" },
-  grow: { flex: 1 },
-  empty: { alignItems: "center", paddingTop: 70 },
-  emptyTitle: { marginTop: 12, color: palette.ink, fontWeight: "800", fontSize: 16, writingDirection: "rtl" },
-  emptyText: { marginTop: 5, color: palette.muted, fontSize: 13, writingDirection: "rtl" },
+  full: { flex: 1 },
+  header: {
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    paddingTop: 6,
+    marginBottom: 16,
+  },
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: "900",
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
+  title: {
+    fontSize: 23,
+    lineHeight: 30,
+    fontWeight: "900",
+    writingDirection: "rtl",
+    textAlign: "right",
+    marginTop: 2,
+  },
+  addButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  search: {
+    height: 51,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 17,
+    paddingHorizontal: 14,
+    gap: 9,
+  },
+  searchInput: { flex: 1, fontSize: 14, writingDirection: "rtl" },
+  controls: { flexDirection: "row-reverse", gap: 8, marginVertical: 14 },
+  importButton: {
+    height: 43,
+    paddingHorizontal: 13,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 14,
+    flex: 1,
+  },
+  importText: { fontWeight: "900", fontSize: 12, writingDirection: "rtl" },
+  sortButton: {
+    height: 43,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    borderWidth: 1,
+    borderRadius: 14,
+  },
+  sortText: { fontSize: 10, fontWeight: "800", writingDirection: "rtl" },
+  viewButton: {
+    width: 43,
+    borderWidth: 1,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  list: { paddingBottom: 28 },
+  label: {
+    fontSize: 12,
+    fontWeight: "900",
+    writingDirection: "rtl",
+    textAlign: "right",
+    marginTop: 5,
+    marginBottom: 10,
+  },
+  grid: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  folderList: { gap: 5 },
+  empty: { alignItems: "center", paddingTop: 80, paddingHorizontal: 30 },
+  emptyTitle: {
+    marginTop: 14,
+    fontSize: 17,
+    fontWeight: "900",
+    writingDirection: "rtl",
+  },
+  emptyText: {
+    marginTop: 6,
+    fontSize: 13,
+    textAlign: "center",
+    writingDirection: "rtl",
+  },
+  selectAll: { alignSelf: "flex-end", marginTop: -7, marginBottom: 8 },
+  selectAllText: { fontSize: 12, fontWeight: "900", writingDirection: "rtl" },
 });
