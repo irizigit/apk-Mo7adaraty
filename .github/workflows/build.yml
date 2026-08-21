@@ -1,4 +1,4 @@
-name: Android APK Build
+name: Optimized Android Release Build
 
 on:
   push:
@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-debug-apk:
-    name: Build debug APK
+  build-release:
+    name: Build optimized release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -35,15 +35,35 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Android project
-        run: npx expo prebuild --platform android --no-install
+        run: npx expo prebuild --platform android --no-install --clean
 
-      - name: Build debug APK
+      - name: Generate temporary release keystore
+        run: >-
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/release.keystore"
+          -storepass android -alias mo7adaraty -keypass android
+          -keyalg RSA -keysize 2048 -validity 10000
+          -dname "CN=Mo7adaraty Nova, O=Mo7adaraty, C=MA"
+
+      - name: Build optimized arm64 APK and AAB
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: >-
+          ./gradlew :app:assembleRelease :app:bundleRelease
+          -Pandroid.injected.signing.store.file="$RUNNER_TEMP/release.keystore"
+          -Pandroid.injected.signing.store.password=android
+          -Pandroid.injected.signing.key.alias=mo7adaraty
+          -Pandroid.injected.signing.key.password=android
+          -PreactNativeArchitectures=arm64-v8a
 
-      - name: Upload APK artifact
+      - name: Upload optimized arm64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: mo7adaraty-nova-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: mo7adaraty-nova-arm64-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Upload Google Play AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: mo7adaraty-nova-arm64-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
